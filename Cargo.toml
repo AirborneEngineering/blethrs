@@ -1,0 +1,29 @@
+[package]
+name = "blethrs"
+version = "0.1.0"
+authors = ["Adam Greig <adam@adamgreig.com>"]
+
+[dependencies]
+cortex-m = "0.4.3"
+cortex-m-semihosting = "0.2.0"
+vcell = "0.1.0"
+
+[dependencies.cortex-m-rt]
+version = "0.3.14"
+features = ["abort-on-panic"]
+
+[dependencies.smoltcp]
+version = "0.4.0"
+default-features = false
+
+[dependencies.managed]
+version = "0.6.1"
+default-features = false
+
+[profile.dev]
+codegen-units = 1
+incremental = false
+
+[profile.release]
+debug = true
+lto = true
