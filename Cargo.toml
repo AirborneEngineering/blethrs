@@ -20,6 +20,10 @@ default-features = false
 version = "0.6.1"
 default-features = false
 
+[dependencies.stm32f4]
+path = "/home/adam/Projects/stm32-rs/stm32f4"
+features = ["stm32f407", "rt"]
+
 [profile.dev]
 codegen-units = 1
 incremental = false
