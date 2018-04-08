@@ -1,5 +1,8 @@
 extern crate smoltcp;
 
+use ::bootload;
+use ::flash;
+
 use ethernet::EthernetDevice;
 
 use self::smoltcp::time::Instant;
@@ -7,15 +10,11 @@ use self::smoltcp::wire::{EthernetAddress, IpAddress, IpCidr};
 use self::smoltcp::iface::{Neighbor, NeighborCache, EthernetInterface, EthernetInterfaceBuilder};
 use self::smoltcp::socket::{SocketSet, SocketSetItem, SocketHandle, TcpSocket, TcpSocketBuffer};
 
-/// Network storage.
-///
-/// Stores all the smoltcp required buffers and structs.
+// Stores all the smoltcp required structs.
 pub struct Network<'a> {
     neighbor_cache_storage: [Option<(IpAddress, Neighbor)>; 16],
     ip_addr: Option<[IpCidr; 1]>,
     eth_iface: Option<EthernetInterface<'a, 'a, EthernetDevice>>,
-    tcp_tx_buf_storage: [u8; 1536],
-    tcp_rx_buf_storage: [u8; 1536],
     sockets_storage: [Option<SocketSetItem<'a, 'a>>; 1],
     sockets: Option<SocketSet<'a, 'a, 'a>>,
     tcp_handle: Option<SocketHandle>,
@@ -26,12 +25,22 @@ pub static mut NETWORK: Network = Network {
     neighbor_cache_storage: [None; 16],
     ip_addr: None,
     eth_iface: None,
-    tcp_tx_buf_storage: [0u8; 1536],
-    tcp_rx_buf_storage: [0u8; 1536],
     sockets_storage: [None],
     sockets: None,
     tcp_handle: None,
     initialised: false,
+};
+
+// Stores the underlying data buffers. If these were included in Network,
+// they couldn't live in BSS and therefore take up a load of flash space.
+struct NetworkBuffers {
+    tcp_tx_buf: [u8; 1536],
+    tcp_rx_buf: [u8; 1536],
+}
+
+static mut NETWORK_BUFFERS: NetworkBuffers = NetworkBuffers {
+    tcp_tx_buf: [0u8; 1536],
+    tcp_rx_buf: [0u8; 1536],
 };
 
 /// Initialise the static NETWORK.
@@ -48,8 +57,8 @@ pub unsafe fn init<'a>(eth_dev: EthernetDevice, mac_addr: EthernetAddress, ip_ad
                             .finalize());
 
     NETWORK.sockets = Some(SocketSet::new(&mut NETWORK.sockets_storage.as_mut()[..]));
-    let tcp_rx_buf = TcpSocketBuffer::new(&mut NETWORK.tcp_rx_buf_storage.as_mut()[..]);
-    let tcp_tx_buf = TcpSocketBuffer::new(&mut NETWORK.tcp_tx_buf_storage.as_mut()[..]);
+    let tcp_rx_buf = TcpSocketBuffer::new(&mut NETWORK_BUFFERS.tcp_rx_buf.as_mut()[..]);
+    let tcp_tx_buf = TcpSocketBuffer::new(&mut NETWORK_BUFFERS.tcp_tx_buf.as_mut()[..]);
     let tcp_socket = TcpSocket::new(tcp_rx_buf, tcp_tx_buf);
     NETWORK.tcp_handle = Some(NETWORK.sockets.as_mut().unwrap().add(tcp_socket));
     NETWORK.initialised = true;
@@ -78,9 +87,10 @@ pub fn poll(time_ms: i64) {
             }
             if socket.can_recv() {
                 socket.recv(|buf| (buf.len(), ())).unwrap();
-                let resp = "thanks\r\n".as_bytes();
+                let resp = "bootloading...\r\n".as_bytes();
                 socket.send_slice(resp).unwrap();
                 socket.close();
+                bootload::reset_bootload();
             }
         }
 

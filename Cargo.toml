@@ -8,6 +8,9 @@ cortex-m = "0.4.3"
 cortex-m-semihosting = "0.2.0"
 vcell = "0.1.0"
 
+[build-dependencies]
+built = "0.2.3"
+
 [dependencies.cortex-m-rt]
 version = "0.3.14"
 #features = ["abort-on-panic"]
@@ -34,3 +37,5 @@ incremental = false
 [profile.release]
 debug = true
 lto = true
+codegen-units = 1
+incremental = false

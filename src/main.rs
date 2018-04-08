@@ -13,16 +13,22 @@ extern crate smoltcp;
 
 use stm32f4::stm32f407;
 
+/// Try to print over semihosting if a debugger is available
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ({
         use core::fmt::Write;
         use cortex_m_semihosting;
-        let mut stdout = cortex_m_semihosting::hio::hstdout().unwrap();
-        write!(stdout, $($arg)*).unwrap()
+        if unsafe { (*cortex_m::peripheral::DCB::ptr()).dhcsr.read() & 1 == 1 } {
+            match cortex_m_semihosting::hio::hstdout() {
+                Ok(mut stdout) => {write!(stdout, $($arg)*).ok();},
+                Err(_) => ()
+            };
+        }
     })
 }
 
+/// Try to print a line over semihosting if a debugger is available
 #[macro_export]
 macro_rules! println {
     ($fmt:expr) => (print!(concat!($fmt, "\n")));
@@ -31,6 +37,13 @@ macro_rules! println {
 
 mod ethernet;
 mod network;
+mod flash;
+mod bootload;
+
+// Pull in build information (from `built` crate)
+pub mod build_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
 
 /// Set up PLL to 168MHz from 16MHz HSI
 fn rcc_init(peripherals: &mut stm32f407::Peripherals) {
@@ -169,45 +182,60 @@ fn systick_init(syst: &mut stm32f407::SYST) {
 }
 
 fn main() {
-    println!("");
-    println!("-=-=-=-=-= blethrs =-=-=-=-=-");
-
     let mut peripherals = stm32f407::Peripherals::take().unwrap();
     let mut core_peripherals = stm32f407::CorePeripherals::take().unwrap();
 
-    print!(  " Initialising clocks...   ");
+    // Jump to user code if it exists and hasn't asked us to run
+    if bootload::should_bootload(&mut peripherals.RCC) {
+        match flash::valid_user_code() {
+            Some(address) => bootload::bootload(&mut core_peripherals.SCB, address),
+            None => (),
+        }
+    }
+
+    let cfg = flash::UserConfig::get(&mut peripherals.CRC);
+
+    println!("");
+    println!("|-=-=-=-=-=-=-=-=-= blethrs =-=-=-=-=-=-=-=-=-");
+    println!("| Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
+    println!("| Platform {}", build_info::TARGET);
+    println!("| Built on {}", build_info::BUILT_TIME_UTC);
+    println!("| {}", build_info::RUSTC_VERSION);
+    println!("|-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n");
+
+    print!(  " Initialising clocks...               ");
     rcc_init(&mut peripherals);
     println!("OK");
 
-    print!(  " Initialising GPIOs...    ");
+    print!(  " Initialising GPIOs...                ");
     gpio_init(&mut peripherals);
     println!("OK");
 
-    print!(  " Initialising Ethernet... ");
-    let mac_addr = smoltcp::wire::EthernetAddress::from_bytes(
-        &[0x56, 0x54, 0x9f, 0x08, 0x87, 0x1d]);
-    let ip_addr = smoltcp::wire::IpAddress::v4(10, 1, 1, 100);
+    print!(  " Initialising Ethernet...             ");
+    let mac_addr = smoltcp::wire::EthernetAddress::from_bytes(&cfg.mac_address);
+    let ip_addr = smoltcp::wire::IpAddress::Ipv4(smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_address));
     let ip_cidr = smoltcp::wire::IpCidr::new(ip_addr, 24);
     let mut ethdev = ethernet::EthernetDevice::new(
         peripherals.ETHERNET_MAC, peripherals.ETHERNET_DMA);
     ethdev.init(&mut peripherals.RCC, mac_addr.clone());
     println!("OK");
 
-    print!(  " Waiting for link...      ");
+    print!(  " Waiting for link...                  ");
     ethdev.block_until_link();
     println!("OK");
 
-    print!(  " Initialising network...  ");
+    print!(  " Initialising network...              ");
     unsafe { network::init(ethdev, mac_addr.clone(), ip_cidr.clone()) };
     println!("OK");
 
     // Turn on STATUS LED
     peripherals.GPIOE.odr.modify(|_, w| w.odr7().set_bit());
-
     println!(" Ready.\n");
 
     // Begin periodic tasks via systick
     systick_init(&mut core_peripherals.SYST);
+
+    // When main returns, cortex-m-rt goes into an infinite wfi() loop.
 }
 
 static mut SYSTICK_TICKS: u32 = 0;
