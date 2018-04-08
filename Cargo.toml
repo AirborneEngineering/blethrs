@@ -13,8 +13,10 @@ version = "0.3.14"
 features = ["abort-on-panic"]
 
 [dependencies.smoltcp]
-version = "0.4.0"
+git = "https://github.com/m-labs/smoltcp"
+rev = "cd893e6a"
 default-features = false
+features = ["proto-ipv4", "socket-tcp", "socket-udp"]
 
 [dependencies.managed]
 version = "0.6.1"

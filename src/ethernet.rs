@@ -1,9 +1,17 @@
 use core;
-use smoltcp;
+use cortex_m;
 use stm32f407;
 
-use self::smoltcp::phy::{Device, DeviceLimits};
-use self::smoltcp::wire::EthernetAddress;
+use cortex_m_semihosting::hio;
+
+use smoltcp;
+use smoltcp::phy::{Device, DeviceCapabilities, TxToken, RxToken};
+use smoltcp::time::Instant;
+use smoltcp::wire::EthernetAddress;
+
+const ETH_BUF_SIZE: usize = 1536;
+const ETH_NUM_TD: usize = 2;
+const ETH_NUM_RD: usize = 2;
 
 /// Transmit Descriptor representation
 ///
@@ -11,13 +19,92 @@ use self::smoltcp::wire::EthernetAddress;
 /// * tdes1: transmit buffer lengths
 /// * tdes2: transmit buffer address
 /// * tdes3: not used
-#[repr(C,packed)]
+///
+/// Note that Copy and Clone are derived to support initialising an array of TDes,
+/// but you may not move a TDes after its address has been given to the ETH_DMA engine.
 #[derive(Copy,Clone)]
+#[repr(C,packed)]
 struct TDes {
     tdes0: u32,
     tdes1: u32,
     tdes2: u32,
     tdes3: u32,
+}
+
+impl TDes {
+    /// Return true if the RDes is not currently owned by the DMA
+    pub fn available(&self) -> bool {
+        self.tdes0 & (1<<31) == 0
+    }
+
+    /// Release this RDes back to DMA engine for transmission
+    pub fn release(&mut self) {
+        self.tdes0 |= 1<<31;
+    }
+
+    /// Set the length of data in the buffer ponited to by this TDes
+    pub fn set_length(&mut self, length: usize) {
+        self.tdes1 = (length as u32) & 0x1FFF;
+    }
+
+    /// Access the buffer pointed to by this descriptor
+    pub unsafe fn buf_as_slice_mut(&self) -> &mut [u8] {
+        core::slice::from_raw_parts_mut(self.tdes2 as *mut _, self.tdes1 as usize & 0x1FFF)
+    }
+}
+
+/// Store a ring of TDes and associated buffers
+struct TDesRing {
+    td: [TDes; ETH_NUM_TD],
+    tbuf: [[u32; ETH_BUF_SIZE/4]; ETH_NUM_TD],
+    tdidx: usize,
+}
+
+static mut TDESRING: TDesRing = TDesRing {
+    td: [TDes { tdes0: 0, tdes1: 0, tdes2: 0, tdes3: 0 }; ETH_NUM_TD],
+    tbuf: [[0; ETH_BUF_SIZE/4]; ETH_NUM_TD],
+    tdidx: 0,
+};
+
+impl TDesRing {
+    /// Initialise this TDesRing.
+    ///
+    /// The current memory address of the buffers inside this TDesRing will be stored in the
+    /// descriptors, so ensure the TDesRing is not moved after initialisation.
+    pub fn init(&mut self) {
+        for (td, tdbuf) in self.td.iter_mut().zip(self.tbuf.iter()) {
+            // Set FS and LS on each descriptor: each will hold a single full segment.
+            td.tdes0 = (1<<29) | (1<<28);
+            // Store pointer to associated buffer.
+            td.tdes2 = tdbuf.as_ptr() as u32;
+            // No second buffer.
+            td.tdes3 = 0;
+        }
+
+        // Mark final TDes as end-of-ring.
+        self.td.last_mut().unwrap().tdes0 |= 1<<21;
+    }
+
+    /// Return the address of the start of the TDes ring
+    pub fn ptr(&self) -> *const TDes {
+        self.td.as_ptr()
+    }
+
+    /// Return true if a TDes is available for use
+    pub fn available(&self) -> bool {
+        self.td[self.tdidx].available()
+    }
+
+    /// Return the next available TDes if any are available, otherwise None
+    pub fn next(&mut self) -> Option<&mut TDes> {
+        if self.available() {
+            let rv = Some(&mut self.td[self.tdidx]);
+            self.tdidx = (self.tdidx + 1) % ETH_NUM_TD;
+            rv
+        } else {
+            None
+        }
+    }
 }
 
 /// Receive Descriptor representation
@@ -26,8 +113,11 @@ struct TDes {
 /// * rdes1: receive buffer lengths and settings
 /// * rdes2: receive buffer address
 /// * rdes3: not used
-#[repr(C,packed)]
+///
+/// Note that Copy and Clone are derived to support initialising an array of TDes,
+/// but you may not move a TDes after its address has been given to the ETH_DMA engine.
 #[derive(Copy,Clone)]
+#[repr(C,packed)]
 struct RDes {
     rdes0: u32,
     rdes1: u32,
@@ -35,19 +125,82 @@ struct RDes {
     rdes3: u32,
 }
 
-const ETH_BUF_SIZE: usize = 1536;
-const ETH_NUM_TD: usize = 8;
-const ETH_NUM_RD: usize = 2;
+impl RDes {
+    /// Return true if the RDes is not currently owned by the DMA
+    pub fn available(&self) -> bool {
+        self.rdes0 & (1<<31) == 0
+    }
+
+    /// Release this RDes back to the DMA engine
+    pub fn release(&mut self) {
+        self.rdes0 |= 1<<31;
+    }
+
+    /// Access the buffer pointed to by this descriptor
+    pub unsafe fn buf_as_slice(&self) -> &[u8] {
+        core::slice::from_raw_parts(self.rdes2 as *const _, (self.rdes0 >> 16) as usize & 0x3FFF)
+    }
+}
+
+/// Store a ring of RDes and associated buffers
+struct RDesRing {
+    rd: [RDes; ETH_NUM_RD],
+    rbuf: [[u32; ETH_BUF_SIZE/4]; ETH_NUM_RD],
+    rdidx: usize,
+}
+
+static mut RDESRING: RDesRing = RDesRing {
+    rd: [RDes { rdes0: 0, rdes1: 0, rdes2: 0, rdes3: 0 }; ETH_NUM_RD],
+    rbuf: [[0; ETH_BUF_SIZE/4]; ETH_NUM_RD],
+    rdidx: 0,
+};
+
+impl RDesRing {
+    /// Initialise this RDesRing.
+    ///
+    /// The current memory address of the buffers inside this TDesRing will be stored in the
+    /// descriptors, so ensure the TDesRing is not moved after initialisation.
+    pub fn init(&mut self) {
+        for (rd, rdbuf) in self.rd.iter_mut().zip(self.rbuf.iter()) {
+            // Mark each RDes as owned by the DMA engine.
+            rd.rdes0 = 1<<31;
+            // Store length of and pointer to associated buffer.
+            rd.rdes1 = rdbuf.len() as u32 * 4;
+            rd.rdes2 = rdbuf.as_ptr() as u32;
+            // No second buffer.
+            rd.rdes3 = 0;
+        }
+
+        // Mark final RDes as end-of-ring.
+        self.rd.last_mut().unwrap().rdes1 |= 1<<15;
+    }
+
+    /// Return the address of the start of the RDes ring
+    pub fn ptr(&self) -> *const RDes {
+        self.rd.as_ptr()
+    }
+
+    /// Return true if a RDes is available for use
+    pub fn available(&self) -> bool {
+        self.rd[self.rdidx].available()
+    }
+
+    /// Return the next available RDes if any are available, otherwise None
+    pub fn next(&mut self) -> Option<&mut RDes> {
+        if self.available() {
+            let rv = Some(&mut self.rd[self.rdidx]);
+            self.rdidx = (self.rdidx + 1) % ETH_NUM_RD;
+            rv
+        } else {
+            None
+        }
+    }
+}
 
 /// Ethernet device driver
 pub struct EthernetDevice {
-    tbuf: [[u32; ETH_BUF_SIZE/4]; ETH_NUM_TD],
-    rbuf: [[u32; ETH_BUF_SIZE/4]; ETH_NUM_RD],
-    td: [TDes; ETH_NUM_TD],
-    rd: [RDes; ETH_NUM_RD],
-    tdidx: usize,
-    rdidx: usize,
-
+    rdring: &'static mut RDesRing,
+    tdring: &'static mut TDesRing,
     eth_mac: stm32f407::ETHERNET_MAC,
     eth_dma: stm32f407::ETHERNET_DMA,
 }
@@ -58,14 +211,7 @@ impl EthernetDevice {
     /// You must move in ETH_MAC, ETH_DMA, and they are then kept by the device.
     pub fn new(eth_mac: stm32f407::ETHERNET_MAC, eth_dma: stm32f407::ETHERNET_DMA)
     -> EthernetDevice {
-        EthernetDevice {
-            tbuf: [[0; ETH_BUF_SIZE/4]; ETH_NUM_TD],
-            rbuf: [[0; ETH_BUF_SIZE/4]; ETH_NUM_RD],
-            td: [TDes {tdes0: 0, tdes1: 0, tdes2: 0, tdes3: 0}; ETH_NUM_TD],
-            rd: [RDes {rdes0: 0, rdes1: 0, rdes2: 0, rdes3: 0}; ETH_NUM_RD],
-            tdidx: 0, rdidx: 0,
-            eth_mac, eth_dma,
-        }
+        unsafe { EthernetDevice { rdring: &mut RDESRING, tdring: &mut TDESRING, eth_mac, eth_dma }}
     }
 
     /// Initialise the ethernet driver.
@@ -75,10 +221,11 @@ impl EthernetDevice {
     ///
     /// Brings up the PHY and then blocks waiting for a network link.
     pub fn init(&mut self, rcc: &mut stm32f407::RCC, addr: EthernetAddress) {
-        self.init_descriptors();
+        self.tdring.init();
+        self.rdring.init();
+
         self.init_peripherals(rcc, addr);
 
-        // Set up the PHY
         self.phy_reset();
         self.phy_init();
 
@@ -100,35 +247,13 @@ impl EthernetDevice {
         }
     }
 
-    /// Set up descriptor structure.
-    fn init_descriptors(&mut self) {
-        // Set up each TDes in ring mode with associated buffer
-        for (td, tdbuf) in self.td.iter_mut().zip(self.tbuf.iter()) {
-            td.tdes0 = (1<<29) | (1<<28);
-            td.tdes2 = tdbuf as *const _ as u32;
-            td.tdes3 = 0;
-        }
-
-        // Set up each RDes in ring mode with associated buffer
-        for (rd, rdbuf) in self.rd.iter_mut().zip(self.rbuf.iter()) {
-            rd.rdes0 = 1<<31;
-            rd.rdes1 = rdbuf.len() as u32 * 4;
-            rd.rdes2 = rdbuf as *const _ as u32;
-            rd.rdes3 = 0;
-        }
-
-        // Mark final TDes and RDes as end-of-ring
-        self.td.last_mut().unwrap().tdes0 |= 1<<21;
-        self.rd.last_mut().unwrap().rdes1 |= 1<<15;
-    }
-
     /// Sets up the device peripherals.
     fn init_peripherals(&mut self, rcc: &mut stm32f407::RCC, mac: EthernetAddress) {
         // Reset ETH_MAC and ETH_DMA
         rcc.ahb1rstr.modify(|_, w| w.ethmacrst().reset());
+        rcc.ahb1rstr.modify(|_, w| w.ethmacrst().clear_bit());
         self.eth_dma.dmabmr.modify(|_, w| w.sr().reset());
         while self.eth_dma.dmabmr.read().sr().is_reset() {}
-        rcc.ahb1rstr.modify(|_, w| w.ethmacrst().clear_bit());
 
         // Set MAC address
         let mac = mac.as_bytes();
@@ -149,13 +274,14 @@ impl EthernetDevice {
         );
 
         // Tell the ETH DMA the start of each ring
-        self.eth_dma.dmatdlar.write(|w| w.stl().bits(self.td.as_ptr() as u32));
-        self.eth_dma.dmardlar.write(|w| w.srl().bits(self.rd.as_ptr() as u32));
+        self.eth_dma.dmatdlar.write(|w| w.stl().bits(self.tdring.ptr() as u32));
+        self.eth_dma.dmardlar.write(|w| w.srl().bits(self.rdring.ptr() as u32));
 
         // Set DMA bus mode
         self.eth_dma.dmabmr.write(|w|
             w.aab().set_bit()
              .pbl().pbl1()
+             .sr().clear_bit()
         );
 
         // Flush TX FIFO
@@ -240,107 +366,73 @@ impl EthernetDevice {
     }
 }
 
-/// Store a reference to a TDes. Used to interoperate with smoltcp via AsRef/AsMut.
-pub struct TDesRef {
+/// Store a reference to a TDes. Given to smoltcp to exchange for a Tx buffer later.
+pub struct TDesToken {
     tdes: *mut TDes,
     eth: *mut EthernetDevice,
 }
 
-/// Store a reference to an RDes. Used to interoperate with smoltcp via AsRef.
-pub struct RDesRef {
+impl TxToken for TDesToken {
+    fn consume<R, F>(self, _timestamp: Instant, len: usize, f: F) -> smoltcp::Result<R>
+        where F: FnOnce(&mut [u8]) -> smoltcp::Result<R>
+    {
+        unsafe {
+            let tdes = &mut *self.tdes;
+            tdes.set_length(len);
+            let result = f(tdes.buf_as_slice_mut());
+            tdes.release();
+            (*self.eth).resume_tx_dma();
+            result
+        }
+    }
+}
+
+/// Store a reference to an RDes. Given to smoltcp to exchange for an Rx buffer later.
+pub struct RDesToken {
     rdes: *mut RDes,
     eth: *mut EthernetDevice,
 }
 
-
-impl AsRef<[u8]> for TDesRef {
-    /// Convert &TDesRef to &[u8] of referenced data automatically, as required by smoltcp
-    fn as_ref(&self) -> &[u8] {
-        // UNSAFE: Valid TDes will point to valid memory in tdes2 with length in tdes1.
+impl RxToken for RDesToken {
+    fn consume<R, F>(self, _timestamp: Instant, f: F) -> smoltcp::Result<R>
+        where F: FnOnce(&[u8]) -> smoltcp::Result<R>
+    {
         unsafe {
-            core::slice::from_raw_parts((*self.tdes).tdes2 as *const _,
-                                        (*self.tdes).tdes1 as usize & 0x1FFF)
-        }
-    }
-}
-
-impl AsMut<[u8]> for TDesRef {
-    /// Convert &mut TDesRef to &mut [u8] of referenced data automatically, as required by smoltcp
-    fn as_mut(&mut self) -> &mut [u8] {
-        // UNSAFE: Valid TDes will point to valid memory in tdes2 with length in tdes1.
-        unsafe {
-            core::slice::from_raw_parts_mut((*self.tdes).tdes2 as *mut _,
-                                            (*self.tdes).tdes1 as usize & 0x1FFF)
-        }
-    }
-}
-
-impl AsRef<[u8]> for RDesRef {
-    /// Convert &RDesRef to &[u8] of referenced data automatically, as required by smoltcp
-    fn as_ref(&self) -> &[u8] {
-        // UNSAFE: Valid RDes will point to valid memory in tdes2 with length in tdes0.
-        unsafe {
-            core::slice::from_raw_parts((*self.rdes).rdes2 as *const _,
-                                        ((*self.rdes).rdes0 >> 16) as usize & 0x3FFF)
-        }
-    }
-}
-
-impl Drop for TDesRef {
-    /// When we Drop a TDesRef, tell the Ethernet DMA it's clear to send the packet
-    fn drop(&mut self) {
-        // Set the length for our TDes and release it to the DMA
-        unsafe {
-            (*self.tdes).tdes1 = self.as_ref().len() as u32;
-            (*self.tdes).tdes0 |= 1<<31;
-            (*self.eth).resume_tx_dma();
-        }
-    }
-}
-
-impl Drop for RDesRef {
-    /// When we Drop an RDesRef, tell the DMA it now owns that buffer again
-    fn drop(&mut self) {
-        // Release the buffer back to the DMA
-        unsafe {
-            (*self.rdes).rdes0 |= 1<<31;
+            let rdes = &mut *self.rdes;
+            let result = f(rdes.buf_as_slice());
+            rdes.release();
             (*self.eth).resume_rx_dma();
+            result
         }
     }
 }
 
 // Implement the smoltcp Device interface
-impl Device for EthernetDevice {
-    type RxBuffer = RDesRef;
-    type TxBuffer = TDesRef;
+impl<'a> Device<'a> for EthernetDevice {
+    type RxToken = RDesToken;
+    type TxToken = TDesToken;
 
-    fn limits(&self) -> DeviceLimits {
-        let mut limits = DeviceLimits::default();
-        limits.max_transmission_unit = 1500;
-        limits.max_burst_size = Some(core::cmp::min(ETH_NUM_TD, ETH_NUM_RD));
-        limits
+    fn capabilities(&self) -> DeviceCapabilities {
+        let mut caps = DeviceCapabilities::default();
+        caps.max_transmission_unit = 1500;
+        caps.max_burst_size = Some(core::cmp::min(ETH_NUM_TD, ETH_NUM_RD));
+        caps
     }
 
-    fn receive(&mut self, _timestamp: u64) -> smoltcp::Result<Self::RxBuffer> {
-        // See if the next RDes has been released by the DMA yet and return it if so
-        if self.rd[self.rdidx].rdes0 & (1<<31) == 0 {
-            let rv = Ok(RDesRef { rdes: &mut self.rd[self.rdidx] as *mut _, eth: self });
-            self.rdidx = (self.rdidx + 1) % ETH_NUM_RD;
-            return rv;
+    fn receive(&mut self) -> Option<(RDesToken, TDesToken)> {
+        if self.rdring.available() && self.tdring.available() {
+            Some((RDesToken { rdes: self.rdring.next().unwrap(), eth: self },
+                  TDesToken { tdes: self.tdring.next().unwrap(), eth: self }))
         } else {
-            Err(smoltcp::Error::Exhausted)
+            None
         }
     }
 
-    fn transmit(&mut self, _timestamp: u64, length: usize) -> smoltcp::Result<Self::TxBuffer> {
-        // See if the next TDes has been released by the DMA yet and return it if so
-        if self.td[self.tdidx].tdes0 & (1<<31) == 0 {
-            self.td[self.tdidx].tdes1 = length as u32;
-            let rv = Ok(TDesRef { tdes: &mut self.td[self.tdidx] as *mut _, eth: self });
-            self.tdidx = (self.tdidx + 1) % ETH_NUM_TD;
-            return rv;
+    fn transmit(&mut self) -> Option<TDesToken> {
+        if self.tdring.available() {
+            Some(TDesToken { tdes: self.tdring.next().unwrap(), eth: self })
         } else {
-            Err(smoltcp::Error::Exhausted)
+            None
         }
     }
 }

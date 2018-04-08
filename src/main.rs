@@ -8,12 +8,25 @@ extern crate stm32f4;
 
 extern crate smoltcp;
 
-use core::fmt::Write;
-
 use cortex_m::asm;
 use cortex_m_semihosting::hio;
 
 use stm32f4::stm32f407;
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ({
+        use core::fmt::Write;
+        let mut stdout = hio::hstdout().unwrap();
+        write!(stdout, $($arg)*).unwrap()
+    })
+}
+
+#[macro_export]
+macro_rules! println {
+    ($fmt:expr) => (print!(concat!($fmt, "\n")));
+    ($fmt:expr, $($arg:tt)*) => (print!(concat!($fmt, "\n"), $($arg)*));
+}
 
 mod ethernet;
 mod network;
@@ -155,26 +168,31 @@ fn systick_init(syst: &mut stm32f407::SYST) {
 }
 
 fn main() {
-    let mut stdout = hio::hstdout().unwrap();
-    writeln!(stdout, "blethrs initialising").unwrap();
+    println!("blethrs initialising");
 
     let mut peripherals = stm32f407::Peripherals::take().unwrap();
     let mut core_peripherals = stm32f407::CorePeripherals::take().unwrap();
 
     rcc_init(&mut peripherals);
     gpio_init(&mut peripherals);
-    systick_init(&mut core_peripherals.SYST);
 
     let mac_addr = smoltcp::wire::EthernetAddress::from_bytes(
         &[0x56, 0x54, 0x9f, 0x08, 0x87, 0x1d]);
+    let ip_addr = smoltcp::wire::IpAddress::v4(10, 1, 1, 100);
+    let ip_cidr = smoltcp::wire::IpCidr::new(ip_addr, 24);
     let mut ethdev = ethernet::EthernetDevice::new(
         peripherals.ETHERNET_MAC, peripherals.ETHERNET_DMA);
-    ethdev.init(&mut peripherals.RCC, mac_addr);
+    ethdev.init(&mut peripherals.RCC, mac_addr.clone());
+
+    println!("ethdev: {:p}", &ethdev as *const _);
+
+    unsafe { network::init(ethdev, mac_addr.clone(), ip_cidr.clone()) };
 
     // Turn on STATUS LED
     peripherals.GPIOE.odr.modify(|_, w| w.odr7().set_bit());
 
-    writeln!(stdout, "entering main loop").unwrap();
+    println!("initialised");
+    systick_init(&mut core_peripherals.SYST);
 
     loop {
         asm::wfi();
@@ -187,5 +205,6 @@ fn tick() {
     unsafe {
         let ticks = core::ptr::read_volatile(&SYSTICK_TICKS) + 1;
         core::ptr::write_volatile(&mut SYSTICK_TICKS, ticks);
+        network::poll(ticks as i64);
     }
 }
