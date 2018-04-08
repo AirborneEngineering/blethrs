@@ -10,7 +10,8 @@ vcell = "0.1.0"
 
 [dependencies.cortex-m-rt]
 version = "0.3.14"
-features = ["abort-on-panic"]
+#features = ["abort-on-panic"]
+features = []
 
 [dependencies.smoltcp]
 git = "https://github.com/m-labs/smoltcp"

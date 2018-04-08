@@ -1,17 +1,11 @@
 use core;
-use cortex_m;
 use stm32f407;
 
-use cortex_m_semihosting::hio;
-
-use smoltcp;
-use smoltcp::phy::{Device, DeviceCapabilities, TxToken, RxToken};
-use smoltcp::time::Instant;
-use smoltcp::wire::EthernetAddress;
+use smoltcp::{self, phy::{self, DeviceCapabilities}, time::Instant, wire::EthernetAddress};
 
 const ETH_BUF_SIZE: usize = 1536;
-const ETH_NUM_TD: usize = 2;
-const ETH_NUM_RD: usize = 2;
+const ETH_NUM_TD: usize = 4;
+const ETH_NUM_RD: usize = 4;
 
 /// Transmit Descriptor representation
 ///
@@ -32,6 +26,21 @@ struct TDes {
 }
 
 impl TDes {
+    /// Initialises this TDes to point at the given buffer.
+    pub fn init(&mut self, tdbuf: &[u32]) {
+        // Set FS and LS on each descriptor: each will hold a single full segment.
+        self.tdes0 = (1<<29) | (1<<28);
+        // Store pointer to associated buffer.
+        self.tdes2 = tdbuf.as_ptr() as u32;
+        // No second buffer.
+        self.tdes3 = 0;
+    }
+
+    /// Mark this TDes as end-of-ring.
+    pub fn set_end_of_ring(&mut self) {
+        self.tdes0 |= 1<<21;
+    }
+
     /// Return true if the RDes is not currently owned by the DMA
     pub fn available(&self) -> bool {
         self.tdes0 & (1<<31) == 0
@@ -67,22 +76,15 @@ static mut TDESRING: TDesRing = TDesRing {
 };
 
 impl TDesRing {
-    /// Initialise this TDesRing.
+    /// Initialise this TDesRing
     ///
     /// The current memory address of the buffers inside this TDesRing will be stored in the
     /// descriptors, so ensure the TDesRing is not moved after initialisation.
     pub fn init(&mut self) {
         for (td, tdbuf) in self.td.iter_mut().zip(self.tbuf.iter()) {
-            // Set FS and LS on each descriptor: each will hold a single full segment.
-            td.tdes0 = (1<<29) | (1<<28);
-            // Store pointer to associated buffer.
-            td.tdes2 = tdbuf.as_ptr() as u32;
-            // No second buffer.
-            td.tdes3 = 0;
+            td.init(&tdbuf[..]);
         }
-
-        // Mark final TDes as end-of-ring.
-        self.td.last_mut().unwrap().tdes0 |= 1<<21;
+        self.td.last_mut().unwrap().set_end_of_ring();
     }
 
     /// Return the address of the start of the TDes ring
@@ -126,6 +128,22 @@ struct RDes {
 }
 
 impl RDes {
+    /// Initialises this RDes to point at the given buffer.
+    pub fn init(&mut self, rdbuf: &[u32]) {
+        // Mark each RDes as owned by the DMA engine.
+        self.rdes0 = 1<<31;
+        // Store length of and pointer to associated buffer.
+        self.rdes1 = rdbuf.len() as u32 * 4;
+        self.rdes2 = rdbuf.as_ptr() as u32;
+        // No second buffer.
+        self.rdes3 = 0;
+    }
+
+    /// Mark this RDes as end-of-ring.
+    pub fn set_end_of_ring(&mut self) {
+        self.rdes1 |= 1<<15;
+    }
+
     /// Return true if the RDes is not currently owned by the DMA
     pub fn available(&self) -> bool {
         self.rdes0 & (1<<31) == 0
@@ -156,23 +174,15 @@ static mut RDESRING: RDesRing = RDesRing {
 };
 
 impl RDesRing {
-    /// Initialise this RDesRing.
+    /// Initialise this RDesRing
     ///
     /// The current memory address of the buffers inside this TDesRing will be stored in the
     /// descriptors, so ensure the TDesRing is not moved after initialisation.
     pub fn init(&mut self) {
         for (rd, rdbuf) in self.rd.iter_mut().zip(self.rbuf.iter()) {
-            // Mark each RDes as owned by the DMA engine.
-            rd.rdes0 = 1<<31;
-            // Store length of and pointer to associated buffer.
-            rd.rdes1 = rdbuf.len() as u32 * 4;
-            rd.rdes2 = rdbuf.as_ptr() as u32;
-            // No second buffer.
-            rd.rdes3 = 0;
+            rd.init(&rdbuf[..]);
         }
-
-        // Mark final RDes as end-of-ring.
-        self.rd.last_mut().unwrap().rdes1 |= 1<<15;
+        self.rd.last_mut().unwrap().set_end_of_ring();
     }
 
     /// Return the address of the start of the RDes ring
@@ -228,22 +238,27 @@ impl EthernetDevice {
 
         self.phy_reset();
         self.phy_init();
+    }
 
-        // Wait for network link
-        while !self.phy_poll_link() {}
+    pub fn link_established(&mut self) -> bool {
+        return self.phy_poll_link()
+    }
+
+    pub fn block_until_link(&mut self) {
+        while !self.link_established() {}
     }
 
     /// Resume suspended TX DMA operation
     pub fn resume_tx_dma(&mut self) {
         if self.eth_dma.dmasr.read().tps().is_suspended() {
-            self.eth_dma.dmatpdr.write(|w| w.tpd().bits(0));
+            self.eth_dma.dmatpdr.write(|w| w.tpd().poll());
         }
     }
 
     /// Resume suspended RX DMA operation
     pub fn resume_rx_dma(&mut self) {
         if self.eth_dma.dmasr.read().rps().is_suspended() {
-            self.eth_dma.dmarpdr.write(|w| w.rpd().bits(0));
+            self.eth_dma.dmarpdr.write(|w| w.rpd().poll());
         }
     }
 
@@ -258,13 +273,10 @@ impl EthernetDevice {
         // Set MAC address
         let mac = mac.as_bytes();
         self.eth_mac.maca0lr.write(|w| w.maca0l().bits(
-            (mac[0] as u32) << 0 |
-            (mac[1] as u32) << 8 |
-            (mac[2] as u32) <<16 |
-            (mac[3] as u32) <<24));
+            (mac[0] as u32) << 0 | (mac[1] as u32) << 8 |
+            (mac[2] as u32) <<16 | (mac[3] as u32) <<24));
         self.eth_mac.maca0hr.write(|w| w.maca0h().bits(
-            (mac[4] as u16) << 0 |
-            (mac[5] as u16) << 8));
+            (mac[4] as u16) << 0 | (mac[5] as u16) << 8));
 
         // Enable RX and TX. We'll set link speed and duplex at link-up.
         self.eth_mac.maccr.write(|w|
@@ -278,10 +290,9 @@ impl EthernetDevice {
         self.eth_dma.dmardlar.write(|w| w.srl().bits(self.rdring.ptr() as u32));
 
         // Set DMA bus mode
-        self.eth_dma.dmabmr.write(|w|
-            w.aab().set_bit()
+        self.eth_dma.dmabmr.modify(|_, w|
+            w.aab().aligned()
              .pbl().pbl1()
-             .sr().clear_bit()
         );
 
         // Flush TX FIFO
@@ -366,51 +377,38 @@ impl EthernetDevice {
     }
 }
 
-/// Store a reference to a TDes. Given to smoltcp to exchange for a Tx buffer later.
-pub struct TDesToken {
-    tdes: *mut TDes,
-    eth: *mut EthernetDevice,
-}
+pub struct TxToken(*mut EthernetDevice);
+pub struct RxToken(*mut EthernetDevice);
 
-impl TxToken for TDesToken {
+impl phy::TxToken for TxToken {
     fn consume<R, F>(self, _timestamp: Instant, len: usize, f: F) -> smoltcp::Result<R>
         where F: FnOnce(&mut [u8]) -> smoltcp::Result<R>
     {
-        unsafe {
-            let tdes = &mut *self.tdes;
-            tdes.set_length(len);
-            let result = f(tdes.buf_as_slice_mut());
-            tdes.release();
-            (*self.eth).resume_tx_dma();
-            result
-        }
+        let tdes = unsafe { (*self.0).tdring.next().unwrap() };
+        tdes.set_length(len);
+        let result = f(unsafe { tdes.buf_as_slice_mut() });
+        tdes.release();
+        unsafe { (*self.0).resume_tx_dma() };
+        result
     }
 }
 
-/// Store a reference to an RDes. Given to smoltcp to exchange for an Rx buffer later.
-pub struct RDesToken {
-    rdes: *mut RDes,
-    eth: *mut EthernetDevice,
-}
-
-impl RxToken for RDesToken {
+impl phy::RxToken for RxToken {
     fn consume<R, F>(self, _timestamp: Instant, f: F) -> smoltcp::Result<R>
         where F: FnOnce(&[u8]) -> smoltcp::Result<R>
     {
-        unsafe {
-            let rdes = &mut *self.rdes;
-            let result = f(rdes.buf_as_slice());
-            rdes.release();
-            (*self.eth).resume_rx_dma();
-            result
-        }
+        let rdes = unsafe { (*self.0).rdring.next().unwrap() };
+        let result = f(unsafe { rdes.buf_as_slice() });
+        rdes.release();
+        unsafe { (*self.0).resume_rx_dma() };
+        result
     }
 }
 
 // Implement the smoltcp Device interface
-impl<'a> Device<'a> for EthernetDevice {
-    type RxToken = RDesToken;
-    type TxToken = TDesToken;
+impl<'a> phy::Device<'a> for EthernetDevice {
+    type RxToken = RxToken;
+    type TxToken = TxToken;
 
     fn capabilities(&self) -> DeviceCapabilities {
         let mut caps = DeviceCapabilities::default();
@@ -419,18 +417,17 @@ impl<'a> Device<'a> for EthernetDevice {
         caps
     }
 
-    fn receive(&mut self) -> Option<(RDesToken, TDesToken)> {
+    fn receive(&mut self) -> Option<(RxToken, TxToken)> {
         if self.rdring.available() && self.tdring.available() {
-            Some((RDesToken { rdes: self.rdring.next().unwrap(), eth: self },
-                  TDesToken { tdes: self.tdring.next().unwrap(), eth: self }))
+            Some((RxToken(self), TxToken(self)))
         } else {
             None
         }
     }
 
-    fn transmit(&mut self) -> Option<TDesToken> {
+    fn transmit(&mut self) -> Option<TxToken> {
         if self.tdring.available() {
-            Some(TDesToken { tdes: self.tdring.next().unwrap(), eth: self })
+            Some(TxToken(self))
         } else {
             None
         }

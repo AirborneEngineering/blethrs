@@ -1,3 +1,6 @@
+#![feature(core_intrinsics)]
+#![feature(lang_items)]
+
 #![no_std]
 
 extern crate cortex_m;
@@ -8,16 +11,14 @@ extern crate stm32f4;
 
 extern crate smoltcp;
 
-use cortex_m::asm;
-use cortex_m_semihosting::hio;
-
 use stm32f4::stm32f407;
 
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => ({
         use core::fmt::Write;
-        let mut stdout = hio::hstdout().unwrap();
+        use cortex_m_semihosting;
+        let mut stdout = cortex_m_semihosting::hio::hstdout().unwrap();
         write!(stdout, $($arg)*).unwrap()
     })
 }
@@ -168,14 +169,21 @@ fn systick_init(syst: &mut stm32f407::SYST) {
 }
 
 fn main() {
-    println!("blethrs initialising");
+    println!("");
+    println!("-=-=-=-=-= blethrs =-=-=-=-=-");
 
     let mut peripherals = stm32f407::Peripherals::take().unwrap();
     let mut core_peripherals = stm32f407::CorePeripherals::take().unwrap();
 
+    print!(  " Initialising clocks...   ");
     rcc_init(&mut peripherals);
-    gpio_init(&mut peripherals);
+    println!("OK");
 
+    print!(  " Initialising GPIOs...    ");
+    gpio_init(&mut peripherals);
+    println!("OK");
+
+    print!(  " Initialising Ethernet... ");
     let mac_addr = smoltcp::wire::EthernetAddress::from_bytes(
         &[0x56, 0x54, 0x9f, 0x08, 0x87, 0x1d]);
     let ip_addr = smoltcp::wire::IpAddress::v4(10, 1, 1, 100);
@@ -183,20 +191,23 @@ fn main() {
     let mut ethdev = ethernet::EthernetDevice::new(
         peripherals.ETHERNET_MAC, peripherals.ETHERNET_DMA);
     ethdev.init(&mut peripherals.RCC, mac_addr.clone());
+    println!("OK");
 
-    println!("ethdev: {:p}", &ethdev as *const _);
+    print!(  " Waiting for link...      ");
+    ethdev.block_until_link();
+    println!("OK");
 
+    print!(  " Initialising network...  ");
     unsafe { network::init(ethdev, mac_addr.clone(), ip_cidr.clone()) };
+    println!("OK");
 
     // Turn on STATUS LED
     peripherals.GPIOE.odr.modify(|_, w| w.odr7().set_bit());
 
-    println!("initialised");
-    systick_init(&mut core_peripherals.SYST);
+    println!(" Ready.\n");
 
-    loop {
-        asm::wfi();
-    }
+    // Begin periodic tasks via systick
+    systick_init(&mut core_peripherals.SYST);
 }
 
 static mut SYSTICK_TICKS: u32 = 0;
@@ -207,4 +218,27 @@ fn tick() {
         core::ptr::write_volatile(&mut SYSTICK_TICKS, ticks);
         network::poll(ticks as i64);
     }
+}
+
+use core::intrinsics;
+use core::fmt::Write;
+#[lang = "panic_fmt"]
+#[no_mangle]
+pub unsafe extern "C" fn rust_begin_unwind(
+    args: core::fmt::Arguments,
+    file: &'static str,
+    line: u32,
+    col: u32,
+) -> ! {
+    if let Ok(mut stdout) = cortex_m_semihosting::hio::hstdout() {
+        write!(stdout, "panicked at '")
+            .and_then(|_| {
+                stdout
+                    .write_fmt(args)
+                    .and_then(|_| writeln!(stdout, "', {}:{}:{}", file, line, col))
+            })
+            .ok();
+    }
+
+    intrinsics::abort()
 }
