@@ -193,8 +193,6 @@ fn main() {
         }
     }
 
-    let cfg = flash::UserConfig::get(&mut peripherals.CRC);
-
     println!("");
     println!("|-=-=-=-=-=-=-=-=-= blethrs =-=-=-=-=-=-=-=-=-");
     println!("| Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
@@ -211,10 +209,18 @@ fn main() {
     gpio_init(&mut peripherals);
     println!("OK");
 
-    print!(  " Initialising Ethernet...             ");
+    print!(  " Reading configuration...             ");
+    let cfg = flash::UserConfig::get(&mut peripherals.CRC);
     let mac_addr = smoltcp::wire::EthernetAddress::from_bytes(&cfg.mac_address);
-    let ip_addr = smoltcp::wire::IpAddress::Ipv4(smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_address));
-    let ip_cidr = smoltcp::wire::IpCidr::new(ip_addr, 24);
+    let ip_addr = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_address);
+    let gateway = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_gateway);
+    let ip_cidr = smoltcp::wire::Ipv4Cidr::new(ip_addr, cfg.ip_prefix);
+    println!("OK");
+    println!("   MAC Address: {}", mac_addr);
+    println!("   IP Address:  {}", ip_cidr);
+    println!("   Gateway:     {}", gateway);
+
+    print!(  " Initialising Ethernet...             ");
     let mut ethdev = ethernet::EthernetDevice::new(
         peripherals.ETHERNET_MAC, peripherals.ETHERNET_DMA);
     ethdev.init(&mut peripherals.RCC, mac_addr.clone());
@@ -225,8 +231,12 @@ fn main() {
     println!("OK");
 
     print!(  " Initialising network...              ");
-    unsafe { network::init(ethdev, mac_addr.clone(), ip_cidr.clone()) };
+    let cidr = smoltcp::wire::IpCidr::Ipv4(ip_cidr);
+    unsafe { network::init(ethdev, mac_addr.clone(), cidr) };
     println!("OK");
+
+    // Move flash peripheral into flash module
+    flash::init(peripherals.FLASH);
 
     // Turn on STATUS LED
     peripherals.GPIOE.odr.modify(|_, w| w.odr7().set_bit());
@@ -258,6 +268,7 @@ pub unsafe extern "C" fn rust_begin_unwind(
     line: u32,
     col: u32,
 ) -> ! {
+    /*
     if let Ok(mut stdout) = cortex_m_semihosting::hio::hstdout() {
         write!(stdout, "panicked at '")
             .and_then(|_| {
@@ -267,6 +278,7 @@ pub unsafe extern "C" fn rust_begin_unwind(
             })
             .ok();
     }
+    */
 
     intrinsics::abort()
 }

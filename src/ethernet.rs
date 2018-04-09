@@ -4,8 +4,8 @@ use stm32f407;
 use smoltcp::{self, phy::{self, DeviceCapabilities}, time::Instant, wire::EthernetAddress};
 
 const ETH_BUF_SIZE: usize = 1536;
-const ETH_NUM_TD: usize = 4;
-const ETH_NUM_RD: usize = 4;
+const ETH_NUM_TD: usize = 20;
+const ETH_NUM_RD: usize = 20;
 
 /// Transmit Descriptor representation
 ///

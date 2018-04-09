@@ -90,6 +90,8 @@ pub fn poll(time_ms: i64) {
                 let resp = "bootloading...\r\n".as_bytes();
                 socket.send_slice(resp).unwrap();
                 socket.close();
+
+                // TODO find a way to defer this so the response can be transmitted
                 bootload::reset_bootload();
             }
         }
