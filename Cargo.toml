@@ -6,14 +6,15 @@ authors = ["Adam Greig <adam@adamgreig.com>"]
 [dependencies]
 cortex-m = "0.4.3"
 cortex-m-semihosting = "0.2.0"
-vcell = "0.1.0"
+panic-semihosting = "0.1.0"
+panic-abort = "0.1.1"
+byteorder = { version = "1.2.2", default-features = false }
 
 [build-dependencies]
 built = "0.2.3"
 
 [dependencies.cortex-m-rt]
-version = "0.3.14"
-#features = ["abort-on-panic"]
+version = "0.4.0"
 features = []
 
 [dependencies.smoltcp]
@@ -21,10 +22,6 @@ git = "https://github.com/m-labs/smoltcp"
 rev = "cd893e6a"
 default-features = false
 features = ["proto-ipv4", "socket-tcp", "socket-udp"]
-
-[dependencies.managed]
-version = "0.6.1"
-default-features = false
 
 [dependencies.stm32f4]
 path = "/home/adam/Projects/stm32-rs/stm32f4"

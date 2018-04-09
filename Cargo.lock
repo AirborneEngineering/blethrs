@@ -24,9 +24,10 @@ version = "0.1.0"
 dependencies = [
  "built 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "cortex-m-rt 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cortex-m-rt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-semihosting 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "managed 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "panic-semihosting 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "smoltcp 0.4.0 (git+https://github.com/m-labs/smoltcp?rev=cd893e6a)",
  "stm32f4 0.1.0",
  "vcell 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -101,6 +102,15 @@ dependencies = [
  "cortex-m 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "r0 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "cortex-m-rt"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "cortex-m 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "r0 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -184,6 +194,15 @@ dependencies = [
 name = "num-traits"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "panic-semihosting"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "cortex-m 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cortex-m-semihosting 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "percent-encoding"
@@ -347,6 +366,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum cortex-m 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4d553ca1f23403c81e6d3d28a64ef6e8eadd7f395195aacda65cbc0dc987738e"
 "checksum cortex-m 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "2864dd1e83344abe7a6192befbeb8cd88bf763cfc560e28680d5b06a8ce9b7f7"
 "checksum cortex-m-rt 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)" = "49fc1f0cc2c89ab7355cb026b28df8138dbd02255674933015c54113c08ecf9a"
+"checksum cortex-m-rt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5e6d8cc476060aa9c17d3b2ed883652b1ab691e19410847322ef095532b4dbea"
 "checksum cortex-m-semihosting 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4a7a324a8c184dcd3d6bd44cb4f6f85c158de15a2a8e7cd7f550909213ce3de8"
 "checksum git2 0.6.11 (registry+https://github.com/rust-lang/crates.io-index)" = "ee5b4bb7cd2a44e6e5ee3a26ba6a9ca10d4ce2771cdc3839bbc54b47b7d1be84"
 "checksum idna 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)" = "014b298351066f1512874135335d62a789ffe78a9974f94b43ed5621951eaf7d"
@@ -358,6 +378,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum matches 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "100aabe6b8ff4e4a7e32c1c13523379802df0772b82466207ac25b013f193376"
 "checksum num-integer 0.1.36 (registry+https://github.com/rust-lang/crates.io-index)" = "f8d26da319fb45674985c78f1d1caf99aa4941f785d384a2ae36d0740bc3e2fe"
 "checksum num-traits 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "dee092fcdf725aee04dd7da1d21debff559237d49ef1cb3e69bcb8ece44c7364"
+"checksum panic-semihosting 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "214830ec060d6b3fe3531fdd71c68e58f90e093e1d499f3fab80df14bb8e727f"
 "checksum percent-encoding 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "31010dd2e1ac33d5b46a5b413495239882813e0369f8ed8a5e266f173602f831"
 "checksum pkg-config 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)" = "3a8b4c6b8165cd1a1cd4b9b120978131389f64bdaf456435caa41e630edba903"
 "checksum r0 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e2a38df5b15c8d5c7e8654189744d8e396bddc18ad48041a500ce52d6948941f"

@@ -1,5 +1,4 @@
 use core;
-use cortex_m;
 use stm32f407;
 
 
@@ -159,9 +158,9 @@ fn erase_sector(sector: u8) -> Option<()> {
 pub fn read(address: u32, length: usize) -> Option<&'static [u8]> {
     // Don't permit reading before FLASH_CONFIG or after FLASH_END.
     if address_valid(address, length) {
-        None
-    } else {
         unsafe { Some(core::slice::from_raw_parts::<'static, u8>(address as *const _, length)) }
+    } else {
+        None
     }
 }
 

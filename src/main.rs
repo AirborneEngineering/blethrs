@@ -5,11 +5,13 @@
 
 extern crate cortex_m;
 extern crate cortex_m_semihosting;
+extern crate panic_semihosting;
 
 #[macro_use]
 extern crate stm32f4;
 
 extern crate smoltcp;
+extern crate byteorder;
 
 use stm32f4::stm32f407;
 
@@ -18,6 +20,7 @@ use stm32f4::stm32f407;
 macro_rules! print {
     ($($arg:tt)*) => ({
         use core::fmt::Write;
+        use cortex_m;
         use cortex_m_semihosting;
         if unsafe { (*cortex_m::peripheral::DCB::ptr()).dhcsr.read() & 1 == 1 } {
             match cortex_m_semihosting::hio::hstdout() {
@@ -113,7 +116,10 @@ fn rcc_init(peripherals: &mut stm32f407::Peripherals) {
         w.gpioaen().enabled()
          .gpioben().enabled()
          .gpiocen().enabled()
+         .gpioden().enabled()
          .gpioeen().enabled()
+         .gpiogen().enabled()
+         .crcen().enabled()
          .ethmacrxen().enabled()
          .ethmactxen().enabled()
          .ethmacen().enabled()
@@ -256,29 +262,4 @@ fn tick() {
         core::ptr::write_volatile(&mut SYSTICK_TICKS, ticks);
         network::poll(ticks as i64);
     }
-}
-
-use core::intrinsics;
-use core::fmt::Write;
-#[lang = "panic_fmt"]
-#[no_mangle]
-pub unsafe extern "C" fn rust_begin_unwind(
-    args: core::fmt::Arguments,
-    file: &'static str,
-    line: u32,
-    col: u32,
-) -> ! {
-    /*
-    if let Ok(mut stdout) = cortex_m_semihosting::hio::hstdout() {
-        write!(stdout, "panicked at '")
-            .and_then(|_| {
-                stdout
-                    .write_fmt(args)
-                    .and_then(|_| writeln!(stdout, "', {}:{}:{}", file, line, col))
-            })
-            .ok();
-    }
-    */
-
-    intrinsics::abort()
 }

@@ -2,8 +2,8 @@
 runner = 'arm-none-eabi-gdb'
 rustflags = [
   "-C", "link-arg=-Tlink.x",
-  "-C", "linker=cortex-m-rt-ld",
-  "-Z", "linker-flavor=ld",
+  "-C", "linker=lld",
+  "-Z", "linker-flavor=ld.lld",
   "-Z", "thinlto=no",
 ]
 
