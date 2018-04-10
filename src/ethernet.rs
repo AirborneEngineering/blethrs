@@ -7,7 +7,7 @@ const ETH_BUF_SIZE: usize = 1536;
 const ETH_NUM_TD: usize = 4;
 const ETH_NUM_RD: usize = 4;
 
-const ETH_PHY_ADDR: u8 = 0;
+const ETH_PHY_ADDR: u8 = 1;
 
 /// Transmit Descriptor representation
 ///

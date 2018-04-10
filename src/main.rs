@@ -15,6 +15,22 @@ extern crate byteorder;
 
 use stm32f4::stm32f407;
 
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Error {
+    Success,
+    InvalidAddress,
+    LengthNotMultiple4,
+    LengthTooLong,
+    EraseError,
+    WriteError,
+    FlashError,
+    NetworkError,
+    InternalError,
+}
+
+pub type Result<T> = core::result::Result<T, Error>;
+
 /// Try to print over semihosting if a debugger is available
 #[macro_export]
 macro_rules! print {
@@ -44,7 +60,8 @@ mod flash;
 mod bootload;
 
 // Pull in build information (from `built` crate)
-pub mod build_info {
+mod build_info {
+    #![allow(dead_code)]
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
@@ -255,11 +272,27 @@ fn main() {
 }
 
 static mut SYSTICK_TICKS: u32 = 0;
+static mut SYSTICK_RESET_AT: Option<u32> = None;
 exception!(SYS_TICK, tick);
 fn tick() {
+    let ticks = unsafe { core::ptr::read_volatile(&SYSTICK_TICKS) + 1 };
+    unsafe { core::ptr::write_volatile(&mut SYSTICK_TICKS, ticks) };
+    network::poll(ticks as i64);
+    match unsafe { core::ptr::read_volatile(&SYSTICK_RESET_AT) } {
+        Some(reset_time) => if ticks >= reset_time {
+            println!("Performing scheduled reset");
+            bootload::reset_bootload();
+        },
+        None => (),
+    }
+}
+
+/// Reset after some ms delay.
+pub fn schedule_reset(delay: u32) {
     unsafe {
-        let ticks = core::ptr::read_volatile(&SYSTICK_TICKS) + 1;
-        core::ptr::write_volatile(&mut SYSTICK_TICKS, ticks);
-        network::poll(ticks as i64);
+        cortex_m::interrupt::free(|_| {
+            let ticks = core::ptr::read_volatile(&SYSTICK_TICKS) + delay;
+            core::ptr::write_volatile(&mut SYSTICK_RESET_AT, Some(ticks));
+        });
     }
 }

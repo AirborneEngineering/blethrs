@@ -1,9 +1,8 @@
 use smoltcp;
 use byteorder::{ByteOrder, LittleEndian};
 
-use ::bootload;
 use ::flash;
-
+use ::Error;
 use ethernet::EthernetDevice;
 
 use smoltcp::time::Instant;
@@ -17,12 +16,14 @@ const CMD_ERASE: u32 = 2;
 const CMD_WRITE: u32 = 3;
 const CMD_BOOT: u32 = 4;
 
+const BOOTLOAD_PORT: u16 = 7777;
+
 // Stores all the smoltcp required structs.
 pub struct Network<'a> {
     neighbor_cache_storage: [Option<(IpAddress, Neighbor)>; 16],
     ip_addr: Option<[IpCidr; 1]>,
     eth_iface: Option<EthernetInterface<'a, 'a, EthernetDevice>>,
-    sockets_storage: [Option<SocketSetItem<'a, 'a>>; 1],
+    sockets_storage: [Option<SocketSetItem<'a, 'a>>; 2],
     sockets: Option<SocketSet<'a, 'a, 'a>>,
     tcp_handle: Option<SocketHandle>,
     initialised: bool,
@@ -32,21 +33,19 @@ pub static mut NETWORK: Network = Network {
     neighbor_cache_storage: [None; 16],
     ip_addr: None,
     eth_iface: None,
-    sockets_storage: [None],
+    sockets_storage: [None, None],
     sockets: None,
     tcp_handle: None,
     initialised: false,
 };
 
+/// Respond to the information request command with our build information.
 fn cmd_info(socket: &mut TcpSocket) {
-    println!("cmd_info");
     use ::build_info;
     socket.send_slice("blethrs ".as_bytes()).unwrap();
     socket.send_slice(build_info::PKG_VERSION.as_bytes()).unwrap();
     socket.send_slice(" ".as_bytes()).unwrap();
     socket.send_slice(build_info::GIT_VERSION.unwrap().as_bytes()).unwrap();
-    socket.send_slice("\r\nPlatform: ".as_bytes()).unwrap();
-    socket.send_slice(build_info::TARGET.as_bytes()).unwrap();
     socket.send_slice("\r\nBuilt: ".as_bytes()).unwrap();
     socket.send_slice(build_info::BUILT_TIME_UTC.as_bytes()).unwrap();
     socket.send_slice("\r\nCompiler: ".as_bytes()).unwrap();
@@ -54,45 +53,55 @@ fn cmd_info(socket: &mut TcpSocket) {
     socket.send_slice("\r\n".as_bytes()).unwrap();
 }
 
-fn cmd_adr_len(socket: &mut TcpSocket) -> (u32, usize) {
+/// Read an address and length from the socket
+fn read_adr_len(socket: &mut TcpSocket) -> (u32, usize) {
     let mut adr = [0u8; 4];
     let mut len = [0u8; 4];
     socket.recv_slice(&mut adr[..]).ok();
     socket.recv_slice(&mut len[..]).ok();
-    let adr = LittleEndian::read_u32(&adr[..]);
-    let len = LittleEndian::read_u32(&len[..]);
+    let adr = LittleEndian::read_u32(&adr);
+    let len = LittleEndian::read_u32(&len);
     (adr, len as usize)
 }
 
+/// Send a status word back at the start of a response
+fn send_status(socket: &mut TcpSocket, status: ::Error) {
+    let mut resp = [0u8; 4];
+    LittleEndian::write_u32(&mut resp, status as u32);
+    socket.send_slice(&resp).unwrap();
+}
+
 fn cmd_read(socket: &mut TcpSocket) {
-    println!("cmd_read");
-    let (adr, len) = cmd_adr_len(socket);
-    println!("adr={} len={}", adr, len);
-    let data = flash::read(adr, len);
-    match data {
-        Some(data) => { println!("sending data"); socket.send_slice(data).unwrap(); },
-        None => println!("error reading"),
+    let (adr, len) = read_adr_len(socket);
+    match flash::read(adr, len) {
+        Ok(data) => {
+            send_status(socket, Error::Success);
+            socket.send_slice(data).unwrap();
+        },
+        Err(err) => send_status(socket, err),
     };
 }
 
 fn cmd_erase(socket: &mut TcpSocket) {
-    println!("cmd_erase");
-    let (adr, len) = cmd_adr_len(socket);
-    println!("adr={} len={}", adr, len);
-    flash::erase(adr, len);
+    let (adr, len) = read_adr_len(socket);
+    match flash::erase(adr, len) {
+        Ok(()) => send_status(socket, Error::Success),
+        Err(err) => send_status(socket, err),
+    }
 }
 
 fn cmd_write(socket: &mut TcpSocket) {
-    println!("cmd_write");
-    let (adr, len) = cmd_adr_len(socket);
-    println!("adr={} len={}", adr, len);
-    socket.recv(|buf| {flash::write(adr, len, buf); (buf.len(), ())}).unwrap();
+    let (adr, len) = read_adr_len(socket);
+    match socket.recv(|buf| (buf.len(), flash::write(adr, len, buf))) {
+        Ok(Ok(())) => send_status(socket, Error::Success),
+        Ok(Err(err)) => send_status(socket, err),
+        Err(_) => send_status(socket, Error::NetworkError),
+    }
 }
 
-fn cmd_boot() {
-    // TODO find a way to defer this so the response can be transmitted
-    println!("cmd_boot");
-    bootload::reset_bootload();
+fn cmd_boot(socket: &mut TcpSocket) {
+    send_status(socket, Error::Success);
+    ::schedule_reset(50);
 }
 
 // Stores the underlying data buffers. If these were included in Network,
@@ -144,7 +153,7 @@ pub fn poll(time_ms: i64) {
         {
             let mut socket = sockets.get::<TcpSocket>(NETWORK.tcp_handle.unwrap());
             if !socket.is_open() {
-                socket.listen(7777).unwrap();
+                socket.listen(BOOTLOAD_PORT).unwrap();
             }
             if !socket.may_recv() && socket.may_send() {
                 socket.close();
@@ -153,16 +162,16 @@ pub fn poll(time_ms: i64) {
                 let mut cmd = [0u8; 4];
                 socket.recv_slice(&mut cmd[..]).ok();
                 let cmd = LittleEndian::read_u32(&cmd[..]);
-                println!("cmd {}", cmd);
                 match cmd {
                    CMD_INFO  => cmd_info(&mut socket),
                    CMD_READ => cmd_read(&mut socket),
                    CMD_ERASE => cmd_erase(&mut socket),
                    CMD_WRITE => cmd_write(&mut socket),
-                   CMD_BOOT => cmd_boot(),
+                   CMD_BOOT => cmd_boot(&mut socket),
                     _ => (),
                 };
                 socket.close();
+                socket.listen(BOOTLOAD_PORT).unwrap();
             }
         }
 
