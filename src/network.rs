@@ -16,7 +16,7 @@ const CMD_ERASE: u32 = 2;
 const CMD_WRITE: u32 = 3;
 const CMD_BOOT: u32 = 4;
 
-const BOOTLOAD_PORT: u16 = 7777;
+use ::config::TCP_PORT;
 
 // Stores all the smoltcp required structs.
 pub struct Network<'a> {
@@ -153,7 +153,7 @@ pub fn poll(time_ms: i64) {
         {
             let mut socket = sockets.get::<TcpSocket>(NETWORK.tcp_handle.unwrap());
             if !socket.is_open() {
-                socket.listen(BOOTLOAD_PORT).unwrap();
+                socket.listen(TCP_PORT).unwrap();
             }
             if !socket.may_recv() && socket.may_send() {
                 socket.close();
@@ -171,7 +171,6 @@ pub fn poll(time_ms: i64) {
                     _ => (),
                 };
                 socket.close();
-                socket.listen(BOOTLOAD_PORT).unwrap();
             }
         }
 

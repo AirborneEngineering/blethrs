@@ -3,13 +3,12 @@ use cortex_m;
 use stm32f407;
 
 static mut USER_RESET: Option<extern "C" fn()> = None;
-const BOOTLOAD_FLAG_VALUE: u32 = 0xB00110AD;
-const BOOTLOAD_FLAG_ADDRESS: u32 = 0x2000_0000;
+use ::config::{BOOTLOAD_FLAG_VALUE, BOOTLOAD_FLAG_ADDRESS};
 
 /// Returns true if the most recent reset was due to a software request
 ///
-/// Clears the reset cause before returning.
-fn was_software_reset(rcc: &mut stm32f407::RCC) -> bool {
+/// Clears the reset cause before returning, so this answer is only valid once.
+pub fn was_software_reset(rcc: &mut stm32f407::RCC) -> bool {
     let result = rcc.csr.read().sftrstf().bit_is_set();
     rcc.csr.modify(|_, w| w.rmvf().set_bit());
     result
@@ -17,24 +16,13 @@ fn was_software_reset(rcc: &mut stm32f407::RCC) -> bool {
 
 /// Returns true if the bootload flag is set: RAM 0x2000_0000 == 0xB00110AD
 ///
-/// Clears the flag before returning.
-fn flag_set() -> bool {
+/// Clears the flag before returning, so this answer is only valid once.
+pub fn flag_set() -> bool {
     let flag = unsafe {
         core::ptr::read_volatile(BOOTLOAD_FLAG_ADDRESS as *const u32)
     };
     clear_flag();
     return flag == BOOTLOAD_FLAG_VALUE;
-}
-
-fn clear_flag() {
-    unsafe {
-        core::ptr::write_volatile(BOOTLOAD_FLAG_ADDRESS as *mut u32, 0);
-    }
-}
-
-/// Return true if we should try to bootload the user code
-pub fn should_bootload(rcc: &mut stm32f407::RCC) -> bool {
-    !(was_software_reset(rcc) && flag_set())
 }
 
 /// Trigger a reset that will cause us to bootload the user application next go around
@@ -61,3 +49,10 @@ pub fn bootload(scb: &mut cortex_m::peripheral::SCB, address: u32) {
         (USER_RESET.unwrap())();
     }
 }
+
+fn clear_flag() {
+    unsafe {
+        core::ptr::write_volatile(BOOTLOAD_FLAG_ADDRESS as *mut u32, 0);
+    }
+}
+

@@ -54,6 +54,7 @@ macro_rules! println {
     ($fmt:expr, $($arg:tt)*) => (print!(concat!($fmt, "\n"), $($arg)*));
 }
 
+mod config;
 mod ethernet;
 mod network;
 mod flash;
@@ -131,6 +132,7 @@ fn rcc_init(peripherals: &mut stm32f407::Peripherals) {
     // Set up peripheral clocks
     rcc.ahb1enr.modify(|_, w|
         w.gpioaen().enabled()
+         .gpioben().enabled()
          .gpiocen().enabled()
          .gpioden().enabled()
          .gpioeen().enabled()
@@ -140,59 +142,6 @@ fn rcc_init(peripherals: &mut stm32f407::Peripherals) {
          .ethmactxen().enabled()
          .ethmacen().enabled()
     );
-}
-
-fn gpio_init(peripherals: &mut stm32f407::Peripherals) {
-    let gpioa = &peripherals.GPIOA;
-    let gpioc = &peripherals.GPIOC;
-    let gpiod = &peripherals.GPIOD;
-    let gpiog = &peripherals.GPIOG;
-
-    // Status LED
-    gpiod.moder.modify(|_, w| w.moder3().output());
-
-    // Configure ethernet related GPIO:
-    // GPIOA 1, 2, 7
-    // GPIOB 11, 12, 13
-    // GPIOC 1, 4, 5
-    // GPIOG 11, 13, 14
-    // All set to AF11 and very high speed.
-    gpioa.moder.modify(|_, w|
-        w.moder1().alternate()
-         .moder2().alternate()
-         .moder7().alternate());
-    gpiog.moder.modify(|_, w|
-         w.moder11().alternate()
-          .moder14().alternate()
-          .moder13().alternate());
-    gpioc.moder.modify(|_, w|
-        w.moder1().alternate()
-         .moder4().alternate()
-         .moder5().alternate());
-    gpioa.ospeedr.modify(|_, w|
-        w.ospeedr1().very_high_speed()
-         .ospeedr2().very_high_speed()
-         .ospeedr7().very_high_speed());
-    gpiog.ospeedr.modify(|_, w|
-        w.ospeedr11().very_high_speed()
-         .ospeedr14().very_high_speed()
-         .ospeedr13().very_high_speed());
-    gpioc.ospeedr.modify(|_, w|
-        w.ospeedr1().very_high_speed()
-         .ospeedr4().very_high_speed()
-         .ospeedr5().very_high_speed());
-    gpioa.afrl.modify(|_, w|
-        w.afrl1().af11()
-         .afrl2().af11()
-         .afrl7().af11());
-    gpiog.afrh.modify(|_, w|
-        w.afrh11().af11()
-         .afrh14().af11()
-         .afrh13().af11());
-    gpioc.afrl.modify(|_, w|
-        w.afrl1().af11()
-         .afrl4().af11()
-         .afrl5().af11());
 }
 
 /// Set up the systick to provide a 1ms timebase
@@ -209,11 +158,11 @@ fn main() {
     let mut core_peripherals = stm32f407::CorePeripherals::take().unwrap();
 
     // Jump to user code if it exists and hasn't asked us to run
-    if bootload::should_bootload(&mut peripherals.RCC) {
-        match flash::valid_user_code() {
-            Some(address) => bootload::bootload(&mut core_peripherals.SCB, address),
-            None => (),
-        }
+    match flash::valid_user_code() {
+        Some(address) => if !config::should_enter_bootloader(&mut peripherals) {
+            bootload::bootload(&mut core_peripherals.SCB, address);
+        },
+        None => (),
     }
 
     println!("");
@@ -229,16 +178,21 @@ fn main() {
     println!("OK");
 
     print!(  " Initialising GPIOs...                ");
-    gpio_init(&mut peripherals);
+    config::configure_gpio(&mut peripherals);
     println!("OK");
 
     print!(  " Reading configuration...             ");
-    let cfg = flash::UserConfig::get(&mut peripherals.CRC);
+    let cfg = match flash::UserConfig::get(&mut peripherals.CRC) {
+        Some(cfg) => { println!("OK"); cfg },
+        None => {
+            println!("Err\nCouldn't read configuration, using default.");
+            flash::DEFAULT_CONFIG
+        },
+    };
     let mac_addr = smoltcp::wire::EthernetAddress::from_bytes(&cfg.mac_address);
     let ip_addr = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_address);
     let gateway = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_gateway);
     let ip_cidr = smoltcp::wire::Ipv4Cidr::new(ip_addr, cfg.ip_prefix);
-    println!("OK");
     println!("   MAC Address: {}", mac_addr);
     println!("   IP Address:  {}", ip_cidr);
     println!("   Gateway:     {}", gateway);
@@ -262,7 +216,6 @@ fn main() {
     flash::init(peripherals.FLASH);
 
     // Turn on STATUS LED
-    peripherals.GPIOD.odr.modify(|_, w| w.odr3().clear_bit());
     println!(" Ready.\n");
 
     // Begin periodic tasks via systick

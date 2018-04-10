@@ -4,16 +4,9 @@ use stm32f407;
 use ::{Error, Result};
 
 
-const FLASH_SECTOR_ADDRESSES: [u32; 12] =
-    [0x0800_0000, 0x0800_4000, 0x0800_8000, 0x0800_C000,
-     0x0801_0000, 0x0802_0000, 0x0804_0000, 0x0806_0000,
-     0x0808_0000, 0x080A_0000, 0x080C_0000, 0x080E_0000];
-const FLASH_END: u32 = 0x080F_FFFF;
-
-const FLASH_CONFIG: u32 = FLASH_SECTOR_ADDRESSES[3];
-const FLASH_USER: u32   = FLASH_SECTOR_ADDRESSES[4];
-
 const CONFIG_MAGIC: u32 = 0x67797870;
+
+use ::config::{FLASH_SECTOR_ADDRESSES, FLASH_END, FLASH_CONFIG, FLASH_USER};
 
 
 static mut FLASH: Option<stm32f407::FLASH> = None;
@@ -37,7 +30,7 @@ pub struct UserConfig {
     checksum: u32,
 }
 
-static DEFAULT_CONFIG: UserConfig = UserConfig {
+pub static DEFAULT_CONFIG: UserConfig = UserConfig {
     // Locally administered MAC
     magic: 0,
     mac_address: [0x02, 0x00, 0x01, 0x02, 0x03, 0x04],
@@ -51,14 +44,14 @@ static DEFAULT_CONFIG: UserConfig = UserConfig {
 impl UserConfig {
     /// Attempt to read the UserConfig from flash sector 3 at 0x0800_C000.
     /// If a valid config cannot be read, the default one is returned instead.
-    pub fn get(crc: &mut stm32f407::CRC) -> UserConfig {
+    pub fn get(crc: &mut stm32f407::CRC) -> Option<UserConfig> {
         // Read config from flash
         let adr = FLASH_CONFIG as *const u32;
         let cfg = unsafe { *(FLASH_CONFIG as *const UserConfig) };
 
         // First check magic is correct
         if cfg.magic != CONFIG_MAGIC {
-            return DEFAULT_CONFIG.clone();
+            return None;
         }
 
         // Validate checksum
@@ -71,9 +64,9 @@ impl UserConfig {
         let crc_computed = crc.dr.read().dr().bits();
 
         if crc_computed == cfg.checksum {
-            cfg.clone()
+            Some(cfg.clone())
         } else {
-            DEFAULT_CONFIG.clone()
+            None
         }
     }
 }
