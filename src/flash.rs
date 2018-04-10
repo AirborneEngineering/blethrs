@@ -148,7 +148,7 @@ pub fn erase(address: u32, length: usize) -> Result<()> {
 
 /// Erase specified sector
 fn erase_sector(sector: u8) -> Result<()> {
-    if (sector as usize) < FLASH_SECTOR_ADDRESSES.len() {
+    if (sector as usize) >= FLASH_SECTOR_ADDRESSES.len() {
         return Err(Error::InternalError);
     }
     let flash = get_flash_peripheral()?;

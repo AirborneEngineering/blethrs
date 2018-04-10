@@ -5,6 +5,19 @@ import crcmod
 import argparse
 
 
+errors = {
+    0: "Success",
+    1: "InvalidAddress",
+    2: "LengthNotMultiple4",
+    3: "LengthTooLong",
+    4: "EraseError",
+    5: "WriteError",
+    6: "FlashError",
+    7: "NetworkError",
+    8: "InternalError",
+}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("hostname")
@@ -43,21 +56,33 @@ def main():
     erase_cmd = struct.pack("<III", 2, conf_address, 24)
     write_cmd = struct.pack("<III", 3, conf_address, 24) + config_bytes
 
-    print("Erasing...")
+    print("Erasing... ", end='', flush=True)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(3.0)
     s.connect((args.hostname, args.port))
     s.sendall(erase_cmd)
-    s.recv(1024)
+    data = s.recv(1024)
     s.close()
+    result = struct.unpack("<I", data)[0]
+    if result == 0:
+        print("OK")
+    else:
+        print("Err\n Error:", errors.get(result, "Unknown {}".format(result)))
+        return
 
-    time.sleep(2)
+    time.sleep(0.01)
 
-    print("Writing...")
+    print("Writing...", end='', flush=True)
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.connect((args.hostname, args.port))
     s.sendall(write_cmd)
-    s.recv(1024)
+    data = s.recv(1024)
     s.close()
+    result = struct.unpack("<I", data)[0]
+    if result == 0:
+        print("OK")
+    else:
+        print("Err\n Error:", errors.get(result, "Unknown {}".format(result)))
 
 
 if __name__ == "__main__":
