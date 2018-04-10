@@ -30,7 +30,7 @@ dependencies = [
  "panic-abort 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-semihosting 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "smoltcp 0.4.0 (git+https://github.com/m-labs/smoltcp?rev=cd893e6a)",
- "stm32f4 0.1.0",
+ "stm32f4 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -221,6 +221,7 @@ dependencies = [
 [[package]]
 name = "stm32f4"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bare-metal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -341,6 +342,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum semver-parser 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 "checksum serde 1.0.37 (registry+https://github.com/rust-lang/crates.io-index)" = "d3bcee660dcde8f52c3765dd9ca5ee36b4bf35470a738eb0bd5a8752b0389645"
 "checksum smoltcp 0.4.0 (git+https://github.com/m-labs/smoltcp?rev=cd893e6a)" = "<none>"
+"checksum stm32f4 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7160e74b308c790fe7ea3ff134d69890d0f63b382a160cefb42512c8fd509166"
 "checksum time 0.1.39 (registry+https://github.com/rust-lang/crates.io-index)" = "a15375f1df02096fb3317256ce2cee6a1f42fc84ea5ad5fc8c421cfe40c73098"
 "checksum toml 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)" = "a0263c6c02c4db6c8f7681f9fd35e90de799ebd4cfdeab77a38f4ff6b3d8c0d9"
 "checksum unicode-bidi 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)" = "49f2bd0c6468a8230e1db229cff8029217cf623c767ea5d60bfbd42729ea54d5"

@@ -21,10 +21,10 @@ features = []
 git = "https://github.com/m-labs/smoltcp"
 rev = "cd893e6a"
 default-features = false
-features = ["proto-ipv4", "socket-tcp", "socket-udp"]
+features = ["proto-ipv4", "socket-tcp"]
 
 [dependencies.stm32f4]
-path = "/home/adam/Projects/stm32-rs/stm32f4"
+version = "0.1.0"
 features = ["stm32f407", "rt"]
 
 [profile.dev]
