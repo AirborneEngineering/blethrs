@@ -33,11 +33,30 @@ pub const BOOTLOAD_FLAG_ADDRESS: u32 = 0x2000_0000;
 ///
 /// Ensure any state change to the peripherals is reset before returning from this function.
 pub fn should_enter_bootloader(peripherals: &mut stm32f407::Peripherals) -> bool {
-    let c1 = bootload::was_software_reset(&mut peripherals.RCC) && bootload::flag_set();
+    // Our plan is:
+    // * If the reset was a software reset, and the magic flag is in the magic location,
+    //   then the user firmware requested bootload, so enter bootload.
+    // * Otherwise we check if PD2 is LOW for at least a full byte period of the UART,
+    //   indicating someone has connected 3V to the external connector.
+    let cond1 = bootload::was_software_reset(&mut peripherals.RCC) && bootload::flag_set();
+
     peripherals.RCC.ahb1enr.modify(|_, w| w.gpioden().enabled());
     peripherals.GPIOD.moder.modify(|_, w| w.moder2().input());
-    let sync = peripherals.GPIOD.idr.read().idr2().bit_is_clear();
-    c1 || sync
+
+    fn read_cyccnt() -> u32 {
+        use core;
+        const CYCCNT: *const u32 = 0xE0001004 as *const u32;
+        unsafe { core::ptr::read_volatile(CYCCNT) }
+    }
+    let delay = 20_000;
+    let cyc1 = read_cyccnt();
+    let mut cond2 = true;
+    while read_cyccnt() < cyc1 + delay {
+        cond2 &= peripherals.GPIOD.idr.read().idr2().bit_is_clear();
+    }
+
+    peripherals.RCC.ahb1enr.modify(|_, w| w.gpioden().disabled());
+    cond1 || cond2
 }
 
 /// Set up GPIOs for ethernet.
