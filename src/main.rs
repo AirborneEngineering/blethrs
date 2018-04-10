@@ -114,7 +114,6 @@ fn rcc_init(peripherals: &mut stm32f407::Peripherals) {
     // Set up peripheral clocks
     rcc.ahb1enr.modify(|_, w|
         w.gpioaen().enabled()
-         .gpioben().enabled()
          .gpiocen().enabled()
          .gpioden().enabled()
          .gpioeen().enabled()
@@ -128,25 +127,26 @@ fn rcc_init(peripherals: &mut stm32f407::Peripherals) {
 
 fn gpio_init(peripherals: &mut stm32f407::Peripherals) {
     let gpioa = &peripherals.GPIOA;
-    let gpiob = &peripherals.GPIOB;
     let gpioc = &peripherals.GPIOC;
-    let gpioe = &peripherals.GPIOE;
+    let gpiod = &peripherals.GPIOD;
+    let gpiog = &peripherals.GPIOG;
 
     // Status LED
-    gpioe.moder.modify(|_, w| w.moder7().output());
+    gpiod.moder.modify(|_, w| w.moder3().output());
 
     // Configure ethernet related GPIO:
     // GPIOA 1, 2, 7
     // GPIOB 11, 12, 13
     // GPIOC 1, 4, 5
+    // GPIOG 11, 13, 14
     // All set to AF11 and very high speed.
     gpioa.moder.modify(|_, w|
         w.moder1().alternate()
          .moder2().alternate()
          .moder7().alternate());
-    gpiob.moder.modify(|_, w|
+    gpiog.moder.modify(|_, w|
          w.moder11().alternate()
-          .moder12().alternate()
+          .moder14().alternate()
           .moder13().alternate());
     gpioc.moder.modify(|_, w|
         w.moder1().alternate()
@@ -156,9 +156,9 @@ fn gpio_init(peripherals: &mut stm32f407::Peripherals) {
         w.ospeedr1().very_high_speed()
          .ospeedr2().very_high_speed()
          .ospeedr7().very_high_speed());
-    gpiob.ospeedr.modify(|_, w|
+    gpiog.ospeedr.modify(|_, w|
         w.ospeedr11().very_high_speed()
-         .ospeedr12().very_high_speed()
+         .ospeedr14().very_high_speed()
          .ospeedr13().very_high_speed());
     gpioc.ospeedr.modify(|_, w|
         w.ospeedr1().very_high_speed()
@@ -168,9 +168,9 @@ fn gpio_init(peripherals: &mut stm32f407::Peripherals) {
         w.afrl1().af11()
          .afrl2().af11()
          .afrl7().af11());
-    gpiob.afrh.modify(|_, w|
+    gpiog.afrh.modify(|_, w|
         w.afrh11().af11()
-         .afrh12().af11()
+         .afrh14().af11()
          .afrh13().af11());
     gpioc.afrl.modify(|_, w|
         w.afrl1().af11()
@@ -245,7 +245,7 @@ fn main() {
     flash::init(peripherals.FLASH);
 
     // Turn on STATUS LED
-    peripherals.GPIOE.odr.modify(|_, w| w.odr7().set_bit());
+    peripherals.GPIOD.odr.modify(|_, w| w.odr3().clear_bit());
     println!(" Ready.\n");
 
     // Begin periodic tasks via systick
