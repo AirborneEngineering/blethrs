@@ -1,6 +1,3 @@
-#![feature(core_intrinsics)]
-#![feature(lang_items)]
-
 #![no_std]
 
 extern crate cortex_m;

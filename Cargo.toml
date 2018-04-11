@@ -5,6 +5,7 @@ authors = ["Adam Greig <adam@adamgreig.com>"]
 
 [dependencies]
 cortex-m = "0.4.3"
+cortex-m-rt = "0.4.0"
 cortex-m-semihosting = "0.2.0"
 panic-semihosting = "0.1.0"
 panic-abort = "0.1.1"
@@ -12,10 +13,6 @@ byteorder = { version = "1.2.2", default-features = false }
 
 [build-dependencies]
 built = "0.2.3"
-
-[dependencies.cortex-m-rt]
-version = "0.4.0"
-features = []
 
 [dependencies.smoltcp]
 git = "https://github.com/m-labs/smoltcp"
