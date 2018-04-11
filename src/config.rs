@@ -43,15 +43,12 @@ pub fn should_enter_bootloader(peripherals: &mut stm32f407::Peripherals) -> bool
     peripherals.RCC.ahb1enr.modify(|_, w| w.gpioden().enabled());
     peripherals.GPIOD.moder.modify(|_, w| w.moder2().input());
 
-    fn read_cyccnt() -> u32 {
-        use core;
-        const CYCCNT: *const u32 = 0xE0001004 as *const u32;
-        unsafe { core::ptr::read_volatile(CYCCNT) }
-    }
-    let delay = 20_000;
-    let cyc1 = read_cyccnt();
+    let hsi_clk = 16_000_000;
+    let sync_baud = 1_000_000;
+    let bit_periods = 10;
+    let delay = (hsi_clk / sync_baud) * bit_periods;
     let mut cond2 = true;
-    while read_cyccnt() < cyc1 + delay {
+    for _ in 0..delay {
         cond2 &= peripherals.GPIOD.idr.read().idr2().bit_is_clear();
     }
 
