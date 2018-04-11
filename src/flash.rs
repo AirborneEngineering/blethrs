@@ -84,15 +84,21 @@ pub fn valid_user_code() -> Option<u32> {
 
 /// Check if address+length is valid for read/write flash.
 fn check_address_valid(address: u32, length: usize) -> Result<()> {
-    if length % 4 != 0 {
-        Err(Error::LengthNotMultiple4)
-    } else if length > 1024 {
-        Err(Error::LengthTooLong)
-    } else if address < FLASH_CONFIG {
+    if address < FLASH_CONFIG {
         Err(Error::InvalidAddress)
     } else if address > (FLASH_END - length as u32 + 1) {
         Err(Error::InvalidAddress)
     } else{
+        Ok(())
+    }
+}
+
+fn check_length_valid(length: usize) -> Result<()> {
+    if length % 4 != 0 {
+        Err(Error::LengthNotMultiple4)
+    } else if length > 1024 {
+        Err(Error::LengthTooLong)
+    } else {
         Ok(())
     }
 }
@@ -185,6 +191,7 @@ fn erase_sector(sector: u8) -> Result<()> {
 /// length must be a multiple of 4.
 pub fn read(address: u32, length: usize) -> Result<&'static [u8]> {
     check_address_valid(address, length)?;
+    check_length_valid(length)?;
     let address = address as *const _;
     unsafe {
         Ok(core::slice::from_raw_parts::<'static, u8>(address, length))
@@ -196,6 +203,7 @@ pub fn read(address: u32, length: usize) -> Result<&'static [u8]> {
 /// length must be a multiple of 4.
 pub fn write(address: u32, length: usize, data: &[u8]) -> Result<()> {
     check_address_valid(address, length)?;
+    check_length_valid(length)?;
     let flash = get_flash_peripheral()?;
     unlock(flash)?;
 

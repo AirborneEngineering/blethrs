@@ -18,41 +18,6 @@ const CMD_BOOT: u32 = 4;
 
 use ::config::TCP_PORT;
 
-// Stores all the smoltcp required structs.
-pub struct Network<'a> {
-    neighbor_cache_storage: [Option<(IpAddress, Neighbor)>; 16],
-    ip_addr: Option<[IpCidr; 1]>,
-    eth_iface: Option<EthernetInterface<'a, 'a, EthernetDevice>>,
-    sockets_storage: [Option<SocketSetItem<'a, 'a>>; 2],
-    sockets: Option<SocketSet<'a, 'a, 'a>>,
-    tcp_handle: Option<SocketHandle>,
-    initialised: bool,
-}
-
-pub static mut NETWORK: Network = Network {
-    neighbor_cache_storage: [None; 16],
-    ip_addr: None,
-    eth_iface: None,
-    sockets_storage: [None, None],
-    sockets: None,
-    tcp_handle: None,
-    initialised: false,
-};
-
-/// Respond to the information request command with our build information.
-fn cmd_info(socket: &mut TcpSocket) {
-    use ::build_info;
-    socket.send_slice("blethrs ".as_bytes()).unwrap();
-    socket.send_slice(build_info::PKG_VERSION.as_bytes()).unwrap();
-    socket.send_slice(" ".as_bytes()).unwrap();
-    socket.send_slice(build_info::GIT_VERSION.unwrap().as_bytes()).unwrap();
-    socket.send_slice("\r\nBuilt: ".as_bytes()).unwrap();
-    socket.send_slice(build_info::BUILT_TIME_UTC.as_bytes()).unwrap();
-    socket.send_slice("\r\nCompiler: ".as_bytes()).unwrap();
-    socket.send_slice(build_info::RUSTC_VERSION.as_bytes()).unwrap();
-    socket.send_slice("\r\n".as_bytes()).unwrap();
-}
-
 /// Read an address and length from the socket
 fn read_adr_len(socket: &mut TcpSocket) -> (u32, usize) {
     let mut adr = [0u8; 4];
@@ -69,6 +34,21 @@ fn send_status(socket: &mut TcpSocket, status: ::Error) {
     let mut resp = [0u8; 4];
     LittleEndian::write_u32(&mut resp, status as u32);
     socket.send_slice(&resp).unwrap();
+}
+
+/// Respond to the information request command with our build information.
+fn cmd_info(socket: &mut TcpSocket) {
+    use ::build_info;
+    send_status(socket, Error::Success);
+    socket.send_slice("blethrs ".as_bytes()).unwrap();
+    socket.send_slice(build_info::PKG_VERSION.as_bytes()).unwrap();
+    socket.send_slice(" ".as_bytes()).unwrap();
+    socket.send_slice(build_info::GIT_VERSION.unwrap().as_bytes()).unwrap();
+    socket.send_slice("\r\nBuilt: ".as_bytes()).unwrap();
+    socket.send_slice(build_info::BUILT_TIME_UTC.as_bytes()).unwrap();
+    socket.send_slice("\r\nCompiler: ".as_bytes()).unwrap();
+    socket.send_slice(build_info::RUSTC_VERSION.as_bytes()).unwrap();
+    socket.send_slice("\r\n".as_bytes()).unwrap();
 }
 
 fn cmd_read(socket: &mut TcpSocket) {
@@ -114,6 +94,27 @@ struct NetworkBuffers {
 static mut NETWORK_BUFFERS: NetworkBuffers = NetworkBuffers {
     tcp_tx_buf: [0u8; 1536],
     tcp_rx_buf: [0u8; 1536],
+};
+
+// Stores all the smoltcp required structs.
+pub struct Network<'a> {
+    neighbor_cache_storage: [Option<(IpAddress, Neighbor)>; 16],
+    ip_addr: Option<[IpCidr; 1]>,
+    eth_iface: Option<EthernetInterface<'a, 'a, EthernetDevice>>,
+    sockets_storage: [Option<SocketSetItem<'a, 'a>>; 1],
+    sockets: Option<SocketSet<'a, 'a, 'a>>,
+    tcp_handle: Option<SocketHandle>,
+    initialised: bool,
+}
+
+pub static mut NETWORK: Network = Network {
+    neighbor_cache_storage: [None; 16],
+    ip_addr: None,
+    eth_iface: None,
+    sockets_storage: [None],
+    sockets: None,
+    tcp_handle: None,
+    initialised: false,
 };
 
 /// Initialise the static NETWORK.
