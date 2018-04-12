@@ -1,14 +1,17 @@
+use core::fmt::Write;
+
 use smoltcp;
-use byteorder::{ByteOrder, LittleEndian};
-
-use ::flash;
-use ::Error;
-use ethernet::EthernetDevice;
-
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr};
 use smoltcp::iface::{Neighbor, NeighborCache, EthernetInterface, EthernetInterfaceBuilder};
 use smoltcp::socket::{SocketSet, SocketSetItem, SocketHandle, TcpSocket, TcpSocketBuffer};
+
+use byteorder::{ByteOrder, LittleEndian};
+
+use ::flash;
+use ::build_info;
+use ::Error;
+use ethernet::EthernetDevice;
 
 const CMD_INFO: u32 = 0;
 const CMD_READ: u32 = 1;
@@ -38,17 +41,16 @@ fn send_status(socket: &mut TcpSocket, status: ::Error) {
 
 /// Respond to the information request command with our build information.
 fn cmd_info(socket: &mut TcpSocket) {
-    use ::build_info;
+
+    // Read the device unique ID
+    let id1: u32 = unsafe { *(0x1FFF_7A10 as *const u32) };
+    let id2: u32 = unsafe { *(0x1FFF_7A14 as *const u32) };
+    let id3: u32 = unsafe { *(0x1FFF_7A18 as *const u32) };
+
     send_status(socket, Error::Success);
-    socket.send_slice("blethrs ".as_bytes()).unwrap();
-    socket.send_slice(build_info::PKG_VERSION.as_bytes()).unwrap();
-    socket.send_slice(" ".as_bytes()).unwrap();
-    socket.send_slice(build_info::GIT_VERSION.unwrap().as_bytes()).unwrap();
-    socket.send_slice("\r\nBuilt: ".as_bytes()).unwrap();
-    socket.send_slice(build_info::BUILT_TIME_UTC.as_bytes()).unwrap();
-    socket.send_slice("\r\nCompiler: ".as_bytes()).unwrap();
-    socket.send_slice(build_info::RUSTC_VERSION.as_bytes()).unwrap();
-    socket.send_slice("\r\n".as_bytes()).unwrap();
+    write!(socket, "blethrs {} {}\r\nBuilt: {}\r\nCompiler: {}\r\nMCU ID: {:08X}{:08X}{:08X}\r\n",
+           build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap(), build_info::BUILT_TIME_UTC,
+           build_info::RUSTC_VERSION, id1, id2, id3).ok();
 }
 
 fn cmd_read(socket: &mut TcpSocket) {
