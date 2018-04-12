@@ -93,6 +93,7 @@ fn check_address_valid(address: u32, length: usize) -> Result<()> {
     }
 }
 
+/// Check length is a multiple of 4 and no greater than 1024
 fn check_length_valid(length: usize) -> Result<()> {
     if length % 4 != 0 {
         Err(Error::LengthNotMultiple4)

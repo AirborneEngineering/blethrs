@@ -46,11 +46,14 @@ class BootloaderError(Exception):
 
 
 class MismatchError(Exception):
-    def __init__(self, addr):
+    def __init__(self, addr, tx, rx):
         self.addr = addr
+        self.tx = tx
+        self.rx = rx
 
     def __str__(self):
-        return "Mismatch at address {:08X}".format(self.addr)
+        return "Mismatch at address {:08X}: {:02X}!={:02X}".format(
+            self.addr, self.tx, self.rx)
 
 
 def boot_request(hostname, port):
