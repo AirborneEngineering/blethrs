@@ -4,6 +4,14 @@ import socket
 import argparse
 import crcmod
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    print("Notice: tqdm not installed, install for progress bars.")
+
+    def tqdm(x, *args, **kwargs):
+        return x
+
 
 commands = {
     "info": 0,
@@ -102,7 +110,34 @@ def boot_cmd(hostname, port):
     interact(hostname, port, cmd)
 
 
-def make_config(mac, ip, gw, prefix):
+def write_file(hostname, port, address, data):
+    length = len(data)
+    segments = length // 1024
+    if length % 1024 != 0:
+        segments += 1
+
+    print("Erasing (may take a few seconds)...")
+    erase_cmd(hostname, port, address, length)
+
+    print("Writing {:.02f}kB in {} segments...".format(length/1024, segments))
+    for sidx in tqdm(range(segments), unit='kB'):
+        saddr = address + sidx*1024
+        sdata = data[sidx*1024:(sidx+1)*1024]
+        write_cmd(hostname, port, saddr, sdata)
+
+    print("Writing completed successfully. Reading back...")
+    for sidx in tqdm(range(segments), unit='kB'):
+        saddr = address + sidx*1024
+        sdata = data[sidx*1024:(sidx+1)*1024]
+        rdata = read_cmd(hostname, port, saddr, 1024)
+        if sdata != rdata[:len(sdata)]:
+            for idx in range(len(sdata)):
+                if sdata[idx] != rdata[idx]:
+                    raise MismatchError(saddr + idx, sdata[idx], rdata[idx])
+    print("Readback successful.")
+
+
+def write_config(hostname, port, address, mac, ip, gw, prefix):
     magic_bytes = struct.pack("<I", 0x67797870)
 
     mac_bytes = [int(x, 16) for x in mac.split(":")]
@@ -128,33 +163,57 @@ def make_config(mac, ip, gw, prefix):
     crc_bytes = struct.pack("<I", crc)
     config_bytes += crc_bytes
 
-    return config_bytes
+    print("Erasing old configuration...")
+    erase_cmd(hostname, port, address, len(config_bytes))
+
+    print("Writing new configuration...")
+    write_cmd(hostname, port, address, config_bytes)
+
+    print("Reading back new configuration...")
+    rdata = read_cmd(hostname, port, address, len(config_bytes))
+
+    if config_bytes != rdata:
+        for idx in range(len(config_bytes)):
+            if config_bytes[idx] != rdata[idx]:
+                raise MismatchError(
+                    address + idx, config_bytes[idx], rdata[idx])
+
+    print("Readback successful.")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("hostname", help="IP address/hostname of bootloader")
-    parser.add_argument("mac_address",
-                        help="MAC address, in format XX:XX:XX:XX:XX:XX")
-    parser.add_argument("ip_address",
-                        help="IP address, in format XXX.XXX.XXX.XXX")
-    parser.add_argument("gateway_address",
-                        help="Gateway address, in format XXX.XXX.XXX.XXX")
-    parser.add_argument("prefix_length", type=int, help="Subnet prefix length")
     parser.add_argument("--port", type=int, default=7777,
                         help="bootloader port, default 7777")
-    parser.add_argument("--lma", default=0x0800C000,
-                        help="address to write to, default 0x0800C000")
     parser.add_argument("--boot-req", action='store_true',
                         help="send an initial boot request to user firmware")
     parser.add_argument("--boot-req-port", type=int, default=1735,
                         help="UDP port for boot request, default 1735")
-    parser.add_argument("--bootload", action='store_true',
-                        help="send a reboot command after writing config")
+    parser.add_argument("--no-reboot", action='store_true',
+                        help="don't send a reboot request after completion")
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.required = True
+    parser_program = subparsers.add_parser(
+        "program", help="Bootload new firmware image")
+    parser_program.add_argument("--lma", default=0x08010000,
+                                help="address to load to, default 0x08010000")
+    parser_program.add_argument("binfile", type=argparse.FileType('rb'),
+                                help="raw binary file to program")
+    parser_configure = subparsers.add_parser(
+        "configure", help="Load new configuration")
+    parser_configure.add_argument(
+        "--lma", default=0x0800C000,
+        help="address to write to, default 0x0800C000")
+    parser_configure.add_argument(
+        "mac_address", help="MAC address, in format XX:XX:XX:XX:XX:XX")
+    parser_configure.add_argument(
+        "ip_address", help="IP address, in format XXX.XXX.XXX.XXX")
+    parser_configure.add_argument(
+        "gateway_address", help="Gateway address, in format XXX.XXX.XXX.XXX")
+    parser_configure.add_argument(
+        "prefix_length", type=int, help="Subnet prefix length")
     args = parser.parse_args()
-
-    config_bytes = make_config(args.mac_address, args.ip_address,
-                               args.gateway_address, args.prefix_length)
 
     if args.boot_req:
         boot_request(args.hostname, args.boot_req_port)
@@ -165,24 +224,17 @@ def main():
         print("Received bootloader information:")
         print(info.decode())
 
-        print("Erasing old configuration...")
-        erase_cmd(args.hostname, args.port, args.lma, len(config_bytes))
+        if args.command == "program":
+            bindata = args.binfile.read()
+            padding = len(bindata) % 4
+            bindata += b"\x00"*padding
+            write_file(args.hostname, args.port, args.lma, bindata)
+        elif args.command == "configure":
+            write_config(args.hostname, args.port, args.lma,
+                         args.mac_address, args.ip_address,
+                         args.gateway_address, args.prefix_length)
 
-        print("Writing new configuration...")
-        write_cmd(args.hostname, args.port, args.lma, config_bytes)
-
-        print("Reading back new configuration...")
-        rdata = read_cmd(args.hostname, args.port, args.lma, len(config_bytes))
-
-        if config_bytes != rdata:
-            for idx in range(len(config_bytes)):
-                if config_bytes[idx] != rdata[idx]:
-                    raise MismatchError(
-                        args.lma + idx, config_bytes[idx], rdata[idx])
-
-        print("Readback successful.")
-
-        if args.bootload:
+        if not args.no_reboot:
             print("Sending reboot command...")
             boot_cmd(args.hostname, args.port)
 
