@@ -50,7 +50,7 @@ fn cmd_info(socket: &mut TcpSocket) {
     send_status(socket, Error::Success);
     write!(socket, "blethrs {} {}\r\nBuilt: {}\r\nCompiler: {}\r\nMCU ID: {:08X}{:08X}{:08X}\r\n",
            build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap(), build_info::BUILT_TIME_UTC,
-           build_info::RUSTC_VERSION, id1, id2, id3).ok();
+           build_info::RUSTC_VERSION, id3, id2, id1).ok();
 }
 
 fn cmd_read(socket: &mut TcpSocket) {
