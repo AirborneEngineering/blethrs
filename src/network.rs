@@ -2,7 +2,7 @@ use core::fmt::Write;
 
 use smoltcp;
 use smoltcp::time::Instant;
-use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr};
+use smoltcp::wire::{EthernetAddress, IpAddress, Ipv4Address, IpCidr};
 use smoltcp::iface::{Neighbor, NeighborCache, EthernetInterface, EthernetInterfaceBuilder};
 use smoltcp::socket::{SocketSet, SocketSetItem, SocketHandle, TcpSocket, TcpSocketBuffer};
 
@@ -122,7 +122,7 @@ pub static mut NETWORK: Network = Network {
 /// Initialise the static NETWORK.
 ///
 /// Sets up the required EthernetInterface and sockets.
-pub unsafe fn init<'a>(eth_dev: EthernetDevice, mac_addr: EthernetAddress, ip_addr: IpCidr) {
+pub unsafe fn init<'a>(eth_dev: EthernetDevice, mac_addr: EthernetAddress, ip_addr: IpCidr, gateway: Ipv4Address) {
     let neighbor_cache = NeighborCache::new(&mut NETWORK.neighbor_cache_storage.as_mut()[..]);
 
     NETWORK.ip_addr = Some([ip_addr]);
@@ -130,6 +130,7 @@ pub unsafe fn init<'a>(eth_dev: EthernetDevice, mac_addr: EthernetAddress, ip_ad
                             .ethernet_addr(mac_addr)
                             .neighbor_cache(neighbor_cache)
                             .ip_addrs(&mut NETWORK.ip_addr.as_mut().unwrap()[..])
+                            .ipv4_gateway(gateway)
                             .finalize());
 
     NETWORK.sockets = Some(SocketSet::new(&mut NETWORK.sockets_storage.as_mut()[..]));
