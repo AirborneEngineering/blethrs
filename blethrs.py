@@ -57,13 +57,27 @@ class MismatchError(Exception):
             self.addr, self.tx, self.rx)
 
 
-def boot_request(hostname, port):
-    print("Sending UDP boot request to port {}...".format(port))
+def boot_request(hostname, boot_req_port, bootloader_port, n_attempts=10):
+    print("Sending UDP boot request to port {}...".format(boot_req_port))
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     cmd = struct.pack("<I", 28)
-    s.sendto(cmd, (hostname, port))
+    s.sendto(cmd, (hostname, boot_req_port))
     print("Sent, waiting for reboot...")
-    time.sleep(2)
+
+    # We wait half a second then attempt TCP connection to the bootloader,
+    # and retry up to n_attempts times before raising the conection error
+    # back to the main loop. This gives the bootloader time to boot and
+    # establish the network link.
+    cmd = struct.pack("<I", commands['info'])
+    for attempt in range(n_attempts):
+        try:
+            time.sleep(0.5)
+            interact(hostname, bootloader_port, cmd, timeout=0.5)
+        except OSError as e:
+            if attempt == n_attempts - 1:
+                raise e
+        else:
+            break
 
 
 def interact(hostname, port, command, timeout=2):
@@ -111,7 +125,13 @@ def boot_cmd(hostname, port):
 
 
 def write_file(hostname, port, address, data):
+    # We need to write in multiples of 4 bytes (since writes are word-by-word),
+    # so add padding to the end of the data.
     length = len(data)
+    if length % 4 != 0:
+        padding = 4 - length % 4
+        data += b"\xFF"*padding
+        length += padding
     segments = length // 1024
     if length % 1024 != 0:
         segments += 1
@@ -194,6 +214,8 @@ def main():
                         help="don't send a reboot request after completion")
     subparsers = parser.add_subparsers(dest="command")
     subparsers.required = True
+    subparsers.add_parser(
+        "info", help="Just read bootloader information without rebooting")
     parser_program = subparsers.add_parser(
         "program", help="Bootload new firmware image")
     parser_program.add_argument("--lma", default=0x08010000,
@@ -213,28 +235,28 @@ def main():
         "gateway_address", help="Gateway address, in format XXX.XXX.XXX.XXX")
     parser_configure.add_argument(
         "prefix_length", type=int, help="Subnet prefix length")
+    subparsers.add_parser("boot", help="Send immediate reboot request")
     args = parser.parse_args()
-
-    if args.boot_req:
-        boot_request(args.hostname, args.boot_req_port)
+    cmd = args.command
 
     try:
+        if args.boot_req:
+            boot_request(args.hostname, args.boot_req_port, args.port)
+
         print("Connecting to bootloader...")
         info = info_cmd(args.hostname, args.port)
         print("Received bootloader information:")
         print(info.decode())
 
-        if args.command == "program":
+        if cmd == "program":
             bindata = args.binfile.read()
-            padding = len(bindata) % 4
-            bindata += b"\x00"*padding
             write_file(args.hostname, args.port, args.lma, bindata)
-        elif args.command == "configure":
+        elif cmd == "configure":
             write_config(args.hostname, args.port, args.lma,
                          args.mac_address, args.ip_address,
                          args.gateway_address, args.prefix_length)
 
-        if not args.no_reboot:
+        if cmd == "boot" or (not args.no_reboot and cmd != "info"):
             print("Sending reboot command...")
             boot_cmd(args.hostname, args.port)
 
