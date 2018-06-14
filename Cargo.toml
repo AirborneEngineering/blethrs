@@ -1,14 +1,14 @@
 [package]
 name = "blethrs"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Adam Greig <adam@adamgreig.com>"]
 
 [dependencies]
-cortex-m = "0.4.3"
-cortex-m-rt = "0.4.0"
-cortex-m-semihosting = "0.2.0"
-panic-semihosting = "0.1.0"
-panic-abort = "0.1.1"
+cortex-m = "0.5.2"
+cortex-m-rt = "0.5.1"
+cortex-m-semihosting = "0.3.0"
+panic-semihosting = "0.3.0"
+panic-abort = "0.2.0"
 byteorder = { version = "1.2.2", default-features = false }
 
 [build-dependencies]
@@ -21,7 +21,7 @@ default-features = false
 features = ["proto-ipv4", "socket-tcp"]
 
 [dependencies.stm32f4]
-version = "0.1.0"
+version = "0.2.0"
 features = ["stm32f407", "rt"]
 
 [profile.dev]
