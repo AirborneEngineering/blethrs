@@ -1,4 +1,8 @@
 #![no_std]
+#![no_main]
+
+#[macro_use(entry,exception)]
+extern crate cortex_m_rt;
 
 extern crate cortex_m;
 extern crate cortex_m_semihosting;
@@ -150,7 +154,8 @@ fn systick_init(syst: &mut stm32f407::SYST) {
     syst.enable_counter();
 }
 
-fn main() {
+entry!(main);
+fn main() -> ! {
     let mut peripherals = stm32f407::Peripherals::take().unwrap();
     let mut core_peripherals = stm32f407::CorePeripherals::take().unwrap();
 
@@ -216,12 +221,14 @@ fn main() {
     // Begin periodic tasks via systick
     systick_init(&mut core_peripherals.SYST);
 
-    // When main returns, cortex-m-rt goes into an infinite wfi() loop.
+    loop {
+        cortex_m::asm::wfi();
+    }
 }
 
 static mut SYSTICK_TICKS: u32 = 0;
 static mut SYSTICK_RESET_AT: Option<u32> = None;
-exception!(SYS_TICK, tick);
+exception!(SysTick, tick);
 fn tick() {
     let ticks = unsafe { core::ptr::read_volatile(&SYSTICK_TICKS) + 1 };
     unsafe { core::ptr::write_volatile(&mut SYSTICK_TICKS, ticks) };
@@ -243,4 +250,17 @@ pub fn schedule_reset(delay: u32) {
             core::ptr::write_volatile(&mut SYSTICK_RESET_AT, Some(ticks));
         });
     }
+}
+
+
+exception!(HardFault, hard_fault);
+
+fn hard_fault(ef: &cortex_m_rt::ExceptionFrame) -> ! {
+    panic!("HardFault at {:#?}", ef);
+}
+
+exception!(*, default_handler);
+
+fn default_handler(irqn: i16) {
+    panic!("Unhandled exception (IRQn = {})", irqn);
 }
