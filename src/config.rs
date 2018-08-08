@@ -6,7 +6,7 @@ use ::bootload;
 pub const TCP_PORT: u16 = 7777;
 
 /// PHY address
-pub const ETH_PHY_ADDR: u8 = 1;
+pub const ETH_PHY_ADDR: u8 = 0;
 
 /// Start address of each sector in flash
 pub const FLASH_SECTOR_ADDRESSES: [u32; 12] =
@@ -62,13 +62,13 @@ pub fn should_enter_bootloader(peripherals: &mut stm32f407::Peripherals) -> bool
 /// This is also a sensible place to turn on an LED or similar to indicate bootloader mode.
 pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
     let gpioa = &peripherals.GPIOA;
+    let gpiob = &peripherals.GPIOB;
     let gpioc = &peripherals.GPIOC;
-    let gpiod = &peripherals.GPIOD;
-    let gpiog = &peripherals.GPIOG;
+    let gpioe = &peripherals.GPIOE;
 
     // Status LED
-    gpiod.moder.modify(|_, w| w.moder3().output());
-    gpiod.odr.modify(|_, w| w.odr3().clear_bit());
+    gpioe.moder.modify(|_, w| w.moder7().output());
+    gpioe.odr.modify(|_, w| w.odr7().clear_bit());
 
     // Configure ethernet related GPIO:
     // GPIOA 1, 2, 7
@@ -79,9 +79,9 @@ pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
         w.moder1().alternate()
          .moder2().alternate()
          .moder7().alternate());
-    gpiog.moder.modify(|_, w|
+    gpiob.moder.modify(|_, w|
          w.moder11().alternate()
-          .moder14().alternate()
+          .moder12().alternate()
           .moder13().alternate());
     gpioc.moder.modify(|_, w|
         w.moder1().alternate()
@@ -91,9 +91,9 @@ pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
         w.ospeedr1().very_high_speed()
          .ospeedr2().very_high_speed()
          .ospeedr7().very_high_speed());
-    gpiog.ospeedr.modify(|_, w|
+    gpiob.ospeedr.modify(|_, w|
         w.ospeedr11().very_high_speed()
-         .ospeedr14().very_high_speed()
+         .ospeedr12().very_high_speed()
          .ospeedr13().very_high_speed());
     gpioc.ospeedr.modify(|_, w|
         w.ospeedr1().very_high_speed()
@@ -103,9 +103,9 @@ pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
         w.afrl1().af11()
          .afrl2().af11()
          .afrl7().af11());
-    gpiog.afrh.modify(|_, w|
+    gpiob.afrh.modify(|_, w|
         w.afrh11().af11()
-         .afrh14().af11()
+         .afrh12().af11()
          .afrh13().af11());
     gpioc.afrl.modify(|_, w|
         w.afrl1().af11()

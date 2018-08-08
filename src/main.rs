@@ -211,7 +211,7 @@ fn main() -> ! {
 
     print!(  " Initialising network...              ");
     let cidr = smoltcp::wire::IpCidr::Ipv4(ip_cidr);
-    unsafe { network::init(ethdev, mac_addr.clone(), cidr) };
+    network::init(ethdev, mac_addr.clone(), cidr);
     println!("OK");
 
     // Move flash peripheral into flash module
@@ -246,14 +246,11 @@ fn tick() {
 
 /// Reset after some ms delay.
 pub fn schedule_reset(delay: u32) {
-    unsafe {
-        cortex_m::interrupt::free(|_| {
-            let ticks = core::ptr::read_volatile(&SYSTICK_TICKS) + delay;
-            core::ptr::write_volatile(&mut SYSTICK_RESET_AT, Some(ticks));
-        });
-    }
+    cortex_m::interrupt::free(|_| unsafe {
+        let ticks = core::ptr::read_volatile(&SYSTICK_TICKS) + delay;
+        core::ptr::write_volatile(&mut SYSTICK_RESET_AT, Some(ticks));
+    });
 }
-
 
 exception!(HardFault, hard_fault);
 

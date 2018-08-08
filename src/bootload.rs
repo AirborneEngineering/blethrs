@@ -18,18 +18,25 @@ pub fn was_software_reset(rcc: &mut stm32f407::RCC) -> bool {
 ///
 /// Clears the flag before returning, so this answer is only valid once.
 pub fn flag_set() -> bool {
-    let flag = unsafe {
-        core::ptr::read_volatile(BOOTLOAD_FLAG_ADDRESS as *const u32)
-    };
-    clear_flag();
-    return flag == BOOTLOAD_FLAG_VALUE;
+    cortex_m::interrupt::free(|_| unsafe {
+        let flag = core::ptr::read_volatile(BOOTLOAD_FLAG_ADDRESS as *const u32);
+        clear_flag();
+        flag == BOOTLOAD_FLAG_VALUE
+    })
+}
+
+fn clear_flag() {
+    cortex_m::interrupt::free(|_| unsafe {
+        core::ptr::write_volatile(BOOTLOAD_FLAG_ADDRESS as *mut u32, 0);
+    });
 }
 
 /// Trigger a reset that will cause us to bootload the user application next go around
 pub fn reset_bootload() {
     clear_flag();
     // It's troublesome to require SCB be passed in here, and
-    // we're literally about to reset the whole microcontroller.
+    // we're literally about to reset the whole microcontroller,
+    // so safety is not such a huge concern.
     let aircr = 0xE000ED0C as *mut u32;
     unsafe { *aircr = (0x5FA<<16) | (1<<2) };
 }
@@ -49,10 +56,3 @@ pub fn bootload(scb: &mut cortex_m::peripheral::SCB, address: u32) {
         (USER_RESET.unwrap())();
     }
 }
-
-fn clear_flag() {
-    unsafe {
-        core::ptr::write_volatile(BOOTLOAD_FLAG_ADDRESS as *mut u32, 0);
-    }
-}
-

@@ -1,4 +1,5 @@
 use core;
+use cortex_m;
 use stm32f407;
 
 use smoltcp::{self, phy::{self, DeviceCapabilities}, time::Instant, wire::EthernetAddress};
@@ -49,12 +50,12 @@ impl TDes {
     }
 
     /// Release this RDes back to DMA engine for transmission
-    pub fn release(&mut self) {
+    pub unsafe fn release(&mut self) {
         self.tdes0 |= 1<<31;
     }
 
-    /// Set the length of data in the buffer ponited to by this TDes
-    pub fn set_length(&mut self, length: usize) {
+    /// Set the length of data in the buffer pointed to by this TDes
+    pub unsafe fn set_length(&mut self, length: usize) {
         self.tdes1 = (length as u32) & 0x1FFF;
     }
 
@@ -152,7 +153,7 @@ impl RDes {
     }
 
     /// Release this RDes back to the DMA engine
-    pub fn release(&mut self) {
+    pub unsafe fn release(&mut self) {
         self.rdes0 |= 1<<31;
     }
 
@@ -217,12 +218,23 @@ pub struct EthernetDevice {
     eth_dma: stm32f407::ETHERNET_DMA,
 }
 
+static mut BUFFERS_USED: bool = false;
+
 impl EthernetDevice {
     /// Create a new uninitialised EthernetDevice.
     ///
     /// You must move in ETH_MAC, ETH_DMA, and they are then kept by the device.
+    ///
+    /// You may only call this function once; subsequent calls will panic.
     pub fn new(eth_mac: stm32f407::ETHERNET_MAC, eth_dma: stm32f407::ETHERNET_DMA)
     -> EthernetDevice {
+        cortex_m::interrupt::free(|_| unsafe {
+            if BUFFERS_USED {
+                panic!("EthernetDevice already created");
+            }
+            BUFFERS_USED = true;
+        });
+
         unsafe { EthernetDevice { rdring: &mut RDESRING, tdring: &mut TDESRING, eth_mac, eth_dma }}
     }
 
@@ -388,12 +400,18 @@ impl phy::TxToken for TxToken {
     fn consume<R, F>(self, _timestamp: Instant, len: usize, f: F) -> smoltcp::Result<R>
         where F: FnOnce(&mut [u8]) -> smoltcp::Result<R>
     {
-        let tdes = unsafe { (*self.0).tdring.next().unwrap() };
-        tdes.set_length(len);
-        let result = f(unsafe { tdes.buf_as_slice_mut() });
-        tdes.release();
-        unsafe { (*self.0).resume_tx_dma() };
-        result
+        // There can only be a single EthernetDevice and therefore all TxTokens are wrappers
+        // to a raw pointer to it. Unsafe required to dereference this pointer and call
+        // the various TDes methods.
+        assert!(len <= ETH_BUF_SIZE);
+        unsafe {
+            let tdes = (*self.0).tdring.next().unwrap();
+            tdes.set_length(len);
+            let result = f(tdes.buf_as_slice_mut());
+            tdes.release();
+            (*self.0).resume_tx_dma();
+            result
+        }
     }
 }
 
@@ -401,11 +419,16 @@ impl phy::RxToken for RxToken {
     fn consume<R, F>(self, _timestamp: Instant, f: F) -> smoltcp::Result<R>
         where F: FnOnce(&[u8]) -> smoltcp::Result<R>
     {
-        let rdes = unsafe { (*self.0).rdring.next().unwrap() };
-        let result = f(unsafe { rdes.buf_as_slice() });
-        rdes.release();
-        unsafe { (*self.0).resume_rx_dma() };
-        result
+        // There can only be a single EthernetDevice and therefore all RxTokens are wrappers
+        // to a raw pointer to it. Unsafe required to dereference this pointer and call
+        // the various RDes methods.
+        unsafe {
+            let rdes = (*self.0).rdring.next().unwrap();
+            let result = f(rdes.buf_as_slice());
+            rdes.release();
+            (*self.0).resume_rx_dma();
+            result
+        }
     }
 }
 
