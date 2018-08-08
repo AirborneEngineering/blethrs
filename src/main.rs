@@ -191,13 +191,8 @@ fn main() -> ! {
             flash::DEFAULT_CONFIG
         },
     };
+    println!("{}", cfg);
     let mac_addr = smoltcp::wire::EthernetAddress::from_bytes(&cfg.mac_address);
-    let ip_addr = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_address);
-    let gateway = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_gateway);
-    let ip_cidr = smoltcp::wire::Ipv4Cidr::new(ip_addr, cfg.ip_prefix);
-    println!("   MAC Address: {}", mac_addr);
-    println!("   IP Address:  {}", ip_cidr);
-    println!("   Gateway:     {}", gateway);
 
     print!(  " Initialising Ethernet...             ");
     let mut ethdev = ethernet::EthernetDevice::new(
@@ -210,8 +205,11 @@ fn main() -> ! {
     println!("OK");
 
     print!(  " Initialising network...              ");
+    let ip_addr = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_address);
+    let gateway = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_gateway);
+    let ip_cidr = smoltcp::wire::Ipv4Cidr::new(ip_addr, cfg.ip_prefix);
     let cidr = smoltcp::wire::IpCidr::Ipv4(ip_cidr);
-    network::init(ethdev, mac_addr.clone(), cidr);
+    network::init(ethdev, mac_addr.clone(), cidr, gateway);
     println!("OK");
 
     // Move flash peripheral into flash module

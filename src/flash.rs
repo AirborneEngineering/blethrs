@@ -1,6 +1,7 @@
 use core;
 use stm32f407;
 
+use core::fmt;
 use ::{Error, Result};
 
 
@@ -28,6 +29,21 @@ pub struct UserConfig {
     pub ip_prefix: u8,
     _padding: [u8; 1],
     checksum: u32,
+}
+
+impl fmt::Display for UserConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "UserConfig:")?;
+        writeln!(f, "  MAC Address: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                 self.mac_address[0], self.mac_address[1], self.mac_address[2],
+                 self.mac_address[3], self.mac_address[4], self.mac_address[5])?;
+        writeln!(f, "  IP Address: {}.{}.{}.{}/{}",
+                 self.ip_address[0], self.ip_address[1], self.ip_address[2], self.ip_address[3],
+                 self.ip_prefix)?;
+        writeln!(f, "  Gateway: {}.{}.{}.{}",
+                 self.ip_gateway[0], self.ip_gateway[1], self.ip_gateway[2], self.ip_gateway[3])?;
+        writeln!(f, "  Checksum: {:08X}", self.checksum as u32)
+    }
 }
 
 pub static DEFAULT_CONFIG: UserConfig = UserConfig {
