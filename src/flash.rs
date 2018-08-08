@@ -104,6 +104,15 @@ fn check_length_valid(length: usize) -> Result<()> {
     }
 }
 
+/// Check the specified length matches the amount of data available
+fn check_length_correct(length: usize, data: &[u8]) -> Result<()> {
+    if length != data.len() {
+        Err(Error::DataLengthIncorrect)
+    } else {
+        Ok(())
+    }
+}
+
 /// Try to get the FLASH peripheral
 fn get_flash_peripheral() -> Result<&'static mut stm32f407::FLASH> {
     match unsafe { FLASH.as_mut() } {
@@ -205,6 +214,7 @@ pub fn read(address: u32, length: usize) -> Result<&'static [u8]> {
 pub fn write(address: u32, length: usize, data: &[u8]) -> Result<()> {
     check_address_valid(address, length)?;
     check_length_valid(length)?;
+    check_length_correct(length, data)?;
     let flash = get_flash_peripheral()?;
     unlock(flash)?;
 

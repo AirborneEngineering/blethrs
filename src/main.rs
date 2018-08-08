@@ -8,7 +8,6 @@ extern crate cortex_m;
 extern crate cortex_m_semihosting;
 extern crate panic_semihosting;
 
-#[macro_use]
 extern crate stm32f4;
 
 extern crate smoltcp;
@@ -23,6 +22,7 @@ pub enum Error {
     InvalidAddress,
     LengthNotMultiple4,
     LengthTooLong,
+    DataLengthIncorrect,
     EraseError,
     WriteError,
     FlashError,
