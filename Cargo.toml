@@ -4,10 +4,9 @@ version = "0.1.2"
 authors = ["Adam Greig <adam@adamgreig.com>"]
 
 [dependencies]
-cortex-m = "0.5.2"
+cortex-m = "0.5.4"
 cortex-m-rt = "0.5.1"
 cortex-m-semihosting = "0.3.0"
-panic-semihosting = "0.3.0"
 panic-abort = "0.2.0"
 byteorder = { version = "1.2.2", default-features = false }
 
@@ -16,12 +15,12 @@ built = "0.3.0"
 
 [dependencies.smoltcp]
 git = "https://github.com/m-labs/smoltcp"
-rev = "cd893e6a"
+rev = "21396867114d267da06f19cc54cc4a1883b900a5"
 default-features = false
 features = ["proto-ipv4", "socket-tcp"]
 
 [dependencies.stm32f4]
-version = "0.2.0"
+version = "0.2.2"
 features = ["stm32f407", "rt"]
 
 [profile.dev]
@@ -33,4 +32,3 @@ debug = true
 lto = true
 codegen-units = 1
 incremental = false
-opt-level = "z"

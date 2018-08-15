@@ -6,7 +6,7 @@ extern crate cortex_m_rt;
 
 extern crate cortex_m;
 extern crate cortex_m_semihosting;
-extern crate panic_semihosting;
+extern crate panic_abort;
 
 extern crate stm32f4;
 
@@ -115,12 +115,12 @@ fn rcc_init(peripherals: &mut stm32f407::Peripherals) {
          .hpre().div1());
 
     // Flash setup: I$ and D$ enabled, prefetch enabled, 5 wait states (OK for 3.3V at 168MHz)
-    flash.acr.write(|w|
+    flash.acr.write(|w| unsafe {
         w.icen().set_bit()
          .dcen().set_bit()
          .prften().set_bit()
          .latency().bits(5)
-    );
+    });
 
     // Swap system clock to PLL
     rcc.cfgr.modify(|_, w| w.sw().pll());
@@ -206,10 +206,9 @@ fn main() -> ! {
 
     print!(  " Initialising network...              ");
     let ip_addr = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_address);
-    let gateway = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_gateway);
     let ip_cidr = smoltcp::wire::Ipv4Cidr::new(ip_addr, cfg.ip_prefix);
     let cidr = smoltcp::wire::IpCidr::Ipv4(ip_cidr);
-    network::init(ethdev, mac_addr.clone(), cidr, gateway);
+    network::init(ethdev, mac_addr.clone(), cidr);
     println!("OK");
 
     // Move flash peripheral into flash module

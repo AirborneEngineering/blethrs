@@ -29,11 +29,12 @@ errors = {
     1: "Invalid Address",
     2: "Length Not Multiple of 4",
     3: "Length Too Long",
-    4: "Erase Error",
-    5: "Write Error",
-    6: "Flash Error",
-    7: "Network Error",
-    8: "Internal Error",
+    4: "Data Length Incorrect",
+    5: "Erase Error",
+    6: "Write Error",
+    7: "Flash Error",
+    8: "Network Error",
+    9: "Internal Error",
 }
 
 

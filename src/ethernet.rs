@@ -233,9 +233,8 @@ impl EthernetDevice {
                 panic!("EthernetDevice already created");
             }
             BUFFERS_USED = true;
-        });
-
-        unsafe { EthernetDevice { rdring: &mut RDESRING, tdring: &mut TDESRING, eth_mac, eth_dma }}
+            EthernetDevice { rdring: &mut RDESRING, tdring: &mut TDESRING, eth_mac, eth_dma }
+        })
     }
 
     /// Initialise the ethernet driver.

@@ -2,7 +2,7 @@ use core::fmt::Write;
 
 use smoltcp;
 use smoltcp::time::Instant;
-use smoltcp::wire::{EthernetAddress, IpAddress, Ipv4Address, IpCidr};
+use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr};
 use smoltcp::iface::{Neighbor, NeighborCache, EthernetInterface, EthernetInterfaceBuilder};
 use smoltcp::socket::{SocketSet, SocketSetItem, SocketHandle, TcpSocket, TcpSocketBuffer};
 
@@ -104,7 +104,7 @@ static mut NETWORK_BUFFERS: NetworkBuffers = NetworkBuffers {
 pub struct Network<'a> {
     neighbor_cache_storage: [Option<(IpAddress, Neighbor)>; 16],
     ip_addr: Option<[IpCidr; 1]>,
-    eth_iface: Option<EthernetInterface<'a, 'a, EthernetDevice>>,
+    eth_iface: Option<EthernetInterface<'a, 'a, 'a, EthernetDevice>>,
     sockets_storage: [Option<SocketSetItem<'a, 'a>>; 1],
     sockets: Option<SocketSet<'a, 'a, 'a>>,
     tcp_handle: Option<SocketHandle>,
@@ -126,7 +126,7 @@ static mut NETWORK: Network = Network {
 /// Sets up the required EthernetInterface and sockets.
 ///
 /// Do not call more than once or this function will panic.
-pub fn init<'a>(eth_dev: EthernetDevice, mac_addr: EthernetAddress, ip_addr: IpCidr, gateway: Ipv4Address) {
+pub fn init<'a>(eth_dev: EthernetDevice, mac_addr: EthernetAddress, ip_addr: IpCidr) {
     // Unsafe required for access to NETWORK.
     // NETWORK.initialised guards against calling twice.
     unsafe {
@@ -144,7 +144,6 @@ pub fn init<'a>(eth_dev: EthernetDevice, mac_addr: EthernetAddress, ip_addr: IpC
                                 .ethernet_addr(mac_addr)
                                 .neighbor_cache(neighbor_cache)
                                 .ip_addrs(&mut NETWORK.ip_addr.as_mut().unwrap()[..])
-                                .ipv4_gateway(gateway)
                                 .finalize());
 
         NETWORK.sockets = Some(SocketSet::new(&mut NETWORK.sockets_storage.as_mut()[..]));
