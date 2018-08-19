@@ -5,7 +5,7 @@ authors = ["Adam Greig <adam@adamgreig.com>"]
 
 [dependencies]
 cortex-m = "0.5.4"
-cortex-m-rt = "0.5.1"
+cortex-m-rt = "0.5.2"
 cortex-m-semihosting = "0.3.0"
 panic-abort = "0.2.0"
 byteorder = { version = "1.2.2", default-features = false }
