@@ -143,7 +143,7 @@ def write_file(hostname, port, address, data):
     erase_cmd(hostname, port, address, length)
 
     print("Writing {:.02f}kB in {} segments...".format(length/1024, segments))
-    for sidx in tqdm(range(segments), unit='kB'):
+    for sidx in tqdm(list(reversed(range(segments))), unit='kB'):
         saddr = address + sidx*1024
         sdata = data[sidx*1024:(sidx+1)*1024]
         write_cmd(hostname, port, saddr, sdata)
