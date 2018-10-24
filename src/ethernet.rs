@@ -335,14 +335,14 @@ impl EthernetDevice {
         while self.eth_mac.macmiiar.read().mb().is_busy() {}
 
         // Return result
-        self.eth_mac.macmiidr.read().td().bits()
+        self.eth_mac.macmiidr.read().md().bits()
     }
 
     /// Write a register over SMI.
     fn smi_write(&mut self, reg: u8, val: u16) {
         // Use PHY address 00000, set write data, set register address, set clock to HCLK/102,
         // start write operation.
-        self.eth_mac.macmiidr.write(|w| w.td().bits(val));
+        self.eth_mac.macmiidr.write(|w| w.md().bits(val));
         self.eth_mac.macmiiar.write(|w|
             w.mb().busy()
              .pa().bits(ETH_PHY_ADDR)
