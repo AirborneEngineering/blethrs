@@ -11,8 +11,7 @@ panic-abort = "0.3.1"
 byteorder = { version = "1.2.6", default-features = false }
 
 [dependencies.smoltcp]
-git = "https://github.com/m-labs/smoltcp"
-rev = "21396867114d267da06f19cc54cc4a1883b900a5"
+version = "0.5.0"
 default-features = false
 features = ["proto-ipv4", "socket-tcp"]
 

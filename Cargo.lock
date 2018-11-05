@@ -23,7 +23,7 @@ dependencies = [
  "cortex-m-rt 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "cortex-m-semihosting 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "panic-abort 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "smoltcp 0.4.0 (git+https://github.com/m-labs/smoltcp?rev=21396867114d267da06f19cc54cc4a1883b900a5)",
+ "smoltcp 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "stm32f4 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -237,8 +237,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "smoltcp"
-version = "0.4.0"
-source = "git+https://github.com/m-labs/smoltcp?rev=21396867114d267da06f19cc54cc4a1883b900a5#21396867114d267da06f19cc54cc4a1883b900a5"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -382,7 +382,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum semver 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1d7eb9ef2c18661902cc47e535f9bc51b78acd254da71d375c2f6720d9a40403"
 "checksum semver-parser 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 "checksum serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)" = "15c141fc7027dd265a47c090bf864cf62b42c4d228bbcf4e51a0c9e2b0d3f7ef"
-"checksum smoltcp 0.4.0 (git+https://github.com/m-labs/smoltcp?rev=21396867114d267da06f19cc54cc4a1883b900a5)" = "<none>"
+"checksum smoltcp 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fef582369edb298c6c41319a544ca9c4e83622f226055ccfcb35974fbb55ed34"
 "checksum stm32f4 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "76ec8196656f425ae374a6055826746e75ce12d0220a5cb2db4dbc509dfdda27"
 "checksum syn 0.15.13 (registry+https://github.com/rust-lang/crates.io-index)" = "7b4439ee8325b4e4b57e59309c3724c9a4478eaeb4eb094b6f3fac180a3b2876"
 "checksum time 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)" = "d825be0eb33fda1a7e68012d51e9c7f451dc1a69391e7fdc197060bb8c56667b"
