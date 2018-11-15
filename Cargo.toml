@@ -4,7 +4,7 @@ version = "0.1.2"
 authors = ["Adam Greig <adam@adamgreig.com>"]
 
 [dependencies]
-cortex-m = "0.5.7"
+cortex-m = "0.5.8"
 cortex-m-rt = "0.6.5"
 cortex-m-semihosting = "0.3.1"
 panic-abort = "0.3.1"
@@ -16,7 +16,7 @@ default-features = false
 features = ["proto-ipv4", "socket-tcp"]
 
 [dependencies.stm32f4]
-version = "0.3.2"
+version = "0.4.0"
 features = ["stm32f407", "rt"]
 
 [build-dependencies]
