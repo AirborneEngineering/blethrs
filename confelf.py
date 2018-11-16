@@ -82,15 +82,16 @@ def main():
     parser.add_argument(
         "ip_address", help="IP address, in format XXX.XXX.XXX.XXX")
     parser.add_argument(
-        "gateway_address", help="Gateway address, in format XXX.XXX.XXX.XXX")
+        "--elffile", default="config.elf", help="Output ELF file to write")
     parser.add_argument(
-        "prefix_length", type=int, help="Subnet prefix length")
+        "--gateway", default="192.168.19.1",
+        help="Gateway address, in format XXX.XXX.XXX.XXX")
     parser.add_argument(
-        "elffile", default="config.elf", help="Output ELF file to write")
+        "--prefix", default=24, type=int, help="Subnet prefix length")
     args = parser.parse_args()
 
     config = make_config(args.mac_address, args.ip_address,
-                         args.gateway_address, args.prefix_length)
+                         args.gateway, args.prefix)
 
     make_elf(args.elffile, config, args.lma)
 
