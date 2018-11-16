@@ -63,12 +63,11 @@ pub fn should_enter_bootloader(peripherals: &mut stm32f407::Peripherals) -> bool
 pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
     let gpioa = &peripherals.GPIOA;
     let gpioc = &peripherals.GPIOC;
-    let gpiod = &peripherals.GPIOD;
     let gpiog = &peripherals.GPIOG;
 
     // Status LED
-    gpiod.moder.modify(|_, w| w.moder3().output());
-    gpiod.odr.modify(|_, w| w.odr3().clear_bit());
+    gpioa.moder.modify(|_, w| w.moder4().output());
+    gpioa.odr.modify(|_, w| w.odr4().set_bit());
 
     // Configure ethernet related GPIO:
     // GPIOA 1, 2, 7
