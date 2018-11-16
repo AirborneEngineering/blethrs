@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import struct
 import argparse
 import tempfile
@@ -58,11 +59,24 @@ def make_elf(filename, data, address):
     ldfile.close()
 
 
+def program_elf(filename):
+    subprocess.run([
+        "arm-none-eabi-gdb", filename, "--batch",
+        "-ex", "target extended-remote /dev/ttyACM0",
+        "-ex", "monitor swdp_scan",
+        "-ex", "attach 1",
+        "-ex", "load",
+        "-ex", "detach"])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--lma", default=0x0800C000,
         help="address to save configuration, default 0x0800C000")
+    parser.add_argument(
+        "--program", action="store_true",
+        help="automatically load generated ELF")
     parser.add_argument(
         "mac_address", help="MAC address, in format XX:XX:XX:XX:XX:XX")
     parser.add_argument(
@@ -79,6 +93,10 @@ def main():
                          args.gateway_address, args.prefix_length)
 
     make_elf(args.elffile, config, args.lma)
+
+    if args.program:
+        program_elf(args.elffile)
+        os.remove(args.elffile)
 
 
 if __name__ == "__main__":
