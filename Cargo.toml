@@ -7,7 +7,7 @@ authors = ["Adam Greig <adam@adamgreig.com>"]
 cortex-m = "0.5.8"
 cortex-m-rt = "0.6.5"
 cortex-m-semihosting = "0.3.1"
-panic-abort = "0.3.1"
+panic-halt = "0.2.0"
 byteorder = { version = "1.2.6", default-features = false }
 
 [dependencies.smoltcp]
