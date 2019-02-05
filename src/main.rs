@@ -163,6 +163,12 @@ fn main() -> ! {
     // Jump to user code if it exists and hasn't asked us to run
     match flash::valid_user_code() {
         Some(address) => if !config::should_enter_bootloader(&mut peripherals) {
+            // Add a short delay before bootloading to overcome some
+            // mysterious (hardware?) problem which has only suddenly
+            // started occuring on some hardware.
+            cortex_m::asm::delay(50000);
+
+            // Jump to user code
             bootload::bootload(&mut core_peripherals.SCB, address);
         },
         None => (),
