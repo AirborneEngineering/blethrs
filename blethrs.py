@@ -127,7 +127,7 @@ def boot_cmd(hostname, port):
     interact(hostname, port, cmd)
 
 
-def write_file(hostname, port, address, data):
+def write_file(hostname, port, chunk_size, address, data):
     # We need to write in multiples of 4 bytes (since writes are word-by-word),
     # so add padding to the end of the data.
     length = len(data)
@@ -135,24 +135,25 @@ def write_file(hostname, port, address, data):
         padding = 4 - length % 4
         data += b"\xFF"*padding
         length += padding
-    segments = length // 1024
-    if length % 1024 != 0:
+    segments = length // chunk_size
+    if length % chunk_size != 0:
         segments += 1
 
     print("Erasing (may take a few seconds)...")
     erase_cmd(hostname, port, address, length)
 
     print("Writing {:.02f}kB in {} segments...".format(length/1024, segments))
-    for sidx in tqdm(list(reversed(range(segments))), unit='kB'):
-        saddr = address + sidx*1024
-        sdata = data[sidx*1024:(sidx+1)*1024]
+    for sidx in tqdm(list(reversed(range(segments))),
+                     unit='kB', unit_scale=chunk_size/1024):
+        saddr = address + sidx*chunk_size
+        sdata = data[sidx*chunk_size:(sidx+1)*chunk_size]
         write_cmd(hostname, port, saddr, sdata)
 
     print("Writing completed successfully. Reading back...")
-    for sidx in tqdm(range(segments), unit='kB'):
-        saddr = address + sidx*1024
-        sdata = data[sidx*1024:(sidx+1)*1024]
-        rdata = read_cmd(hostname, port, saddr, 1024)
+    for sidx in tqdm(range(segments), unit='kB', unit_scale=chunk_size/1024):
+        saddr = address + sidx*chunk_size
+        sdata = data[sidx*chunk_size:(sidx+1)*chunk_size]
+        rdata = read_cmd(hostname, port, saddr, chunk_size)
         if sdata != rdata[:len(sdata)]:
             for idx in range(len(sdata)):
                 if sdata[idx] != rdata[idx]:
@@ -215,6 +216,8 @@ def main():
                         help="UDP port for boot request, default 1735")
     parser.add_argument("--no-reboot", action='store_true',
                         help="don't send a reboot request after completion")
+    parser.add_argument("--chunk-size", type=int, default=512,
+                        help="Size of chunks to write to flash, default 512")
     subparsers = parser.add_subparsers(dest="command")
     subparsers.required = True
     subparsers.add_parser(
@@ -253,7 +256,8 @@ def main():
 
         if cmd == "program":
             bindata = args.binfile.read()
-            write_file(args.hostname, args.port, args.lma, bindata)
+            write_file(args.hostname, args.port, args.chunk_size, args.lma,
+                       bindata)
         elif cmd == "configure":
             write_config(args.hostname, args.port, args.lma,
                          args.mac_address, args.ip_address,
