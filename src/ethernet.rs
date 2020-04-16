@@ -158,8 +158,8 @@ impl RDes {
     }
 
     /// Access the buffer pointed to by this descriptor
-    pub unsafe fn buf_as_slice(&self) -> &[u8] {
-        core::slice::from_raw_parts(self.rdes2 as *const _, (self.rdes0 >> 16) as usize & 0x3FFF)
+    pub unsafe fn buf_as_slice_mut(&self) -> &mut [u8] {
+        core::slice::from_raw_parts_mut(self.rdes2 as *mut _, (self.rdes0 >> 16) as usize & 0x3FFF)
     }
 }
 
@@ -416,14 +416,14 @@ impl phy::TxToken for TxToken {
 
 impl phy::RxToken for RxToken {
     fn consume<R, F>(self, _timestamp: Instant, f: F) -> smoltcp::Result<R>
-        where F: FnOnce(&[u8]) -> smoltcp::Result<R>
+        where F: FnOnce(&mut [u8]) -> smoltcp::Result<R>
     {
         // There can only be a single EthernetDevice and therefore all RxTokens are wrappers
         // to a raw pointer to it. Unsafe required to dereference this pointer and call
         // the various RDes methods.
         unsafe {
             let rdes = (*self.0).rdring.next().unwrap();
-            let result = f(rdes.buf_as_slice());
+            let result = f(rdes.buf_as_slice_mut());
             rdes.release();
             (*self.0).resume_rx_dma();
             result
