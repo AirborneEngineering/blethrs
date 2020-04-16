@@ -1,5 +1,3 @@
-use core::fmt::Write;
-
 use smoltcp;
 use smoltcp::time::Instant;
 use smoltcp::wire::{EthernetAddress, IpAddress, IpCidr};
@@ -7,8 +5,6 @@ use smoltcp::iface::{Neighbor, NeighborCache, EthernetInterface, EthernetInterfa
 use smoltcp::socket::{SocketSet, SocketSetItem, SocketHandle, TcpSocket, TcpSocketBuffer};
 
 use cortex_m;
-
-use byteorder::{ByteOrder, LittleEndian};
 
 use ::flash;
 use ::build_info;
@@ -29,30 +25,57 @@ fn read_adr_len(socket: &mut TcpSocket) -> (u32, usize) {
     let mut len = [0u8; 4];
     socket.recv_slice(&mut adr[..]).ok();
     socket.recv_slice(&mut len[..]).ok();
-    let adr = LittleEndian::read_u32(&adr);
-    let len = LittleEndian::read_u32(&len);
+    let adr = u32::from_le_bytes(adr);
+    let len = u32::from_le_bytes(len);
     (adr, len as usize)
 }
 
 /// Send a status word back at the start of a response
 fn send_status(socket: &mut TcpSocket, status: ::Error) {
-    let mut resp = [0u8; 4];
-    LittleEndian::write_u32(&mut resp, status as u32);
+    let resp = (status as u32).to_le_bytes();
     socket.send_slice(&resp).unwrap();
+}
+
+/// Read device unique ID, return as array of 24 ASCII hex digits
+pub fn get_hex_id() -> [u8; 24] {
+    static HEX_DIGITS: [u8; 16] = [
+        48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
+        65, 66, 67, 68, 69, 70,
+    ];
+    let id1: [u8; 4] = unsafe { *(0x1FFF_7A10 as *const u32) }.to_le_bytes();
+    let id2: [u8; 4] = unsafe { *(0x1FFF_7A14 as *const u32) }.to_le_bytes();
+    let id3: [u8; 4] = unsafe { *(0x1FFF_7A18 as *const u32) }.to_le_bytes();
+    let id = [
+        id3[3], id3[2], id3[1], id3[0],
+        id2[3], id2[2], id2[1], id2[0],
+        id1[3], id1[2], id1[1], id1[0],
+    ];
+    let mut out = [0u8; 24];
+    for (idx, v) in id.iter().enumerate() {
+        let v1 = v & 0x0F;
+        let v2 = (v & 0xF0) >> 4;
+        out[idx*2  ] = HEX_DIGITS[v2 as usize];
+        out[idx*2+1] = HEX_DIGITS[v1 as usize];
+    }
+    out
 }
 
 /// Respond to the information request command with our build information.
 fn cmd_info(socket: &mut TcpSocket) {
 
-    // Read the device unique ID
-    let id1: u32 = unsafe { *(0x1FFF_7A10 as *const u32) };
-    let id2: u32 = unsafe { *(0x1FFF_7A14 as *const u32) };
-    let id3: u32 = unsafe { *(0x1FFF_7A18 as *const u32) };
-
     send_status(socket, Error::Success);
-    write!(socket, "blethrs {} {}\r\nBuilt: {}\r\nCompiler: {}\r\nMCU ID: {:08X}{:08X}{:08X}\r\n",
-           build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap(), build_info::BUILT_TIME_UTC,
-           build_info::RUSTC_VERSION, id3, id2, id1).ok();
+
+    socket.send_slice("blethrs ".as_bytes()).ok();
+    socket.send_slice(build_info::PKG_VERSION.as_bytes()).ok();
+    socket.send_slice(" ".as_bytes()).ok();
+    socket.send_slice(build_info::GIT_VERSION.unwrap().as_bytes()).ok();
+    socket.send_slice("\r\nBuilt: ".as_bytes()).ok();
+    socket.send_slice(build_info::BUILT_TIME_UTC.as_bytes()).ok();
+    socket.send_slice("\r\nCompiler: ".as_bytes()).ok();
+    socket.send_slice(build_info::RUSTC_VERSION.as_bytes()).ok();
+    socket.send_slice("\r\nMCU ID: ".as_bytes()).ok();
+    socket.send_slice(&get_hex_id()).ok();
+    socket.send_slice("\r\n".as_bytes()).ok();
 }
 
 fn cmd_read(socket: &mut TcpSocket) {
@@ -181,7 +204,7 @@ pub fn poll(time_ms: i64) {
             if socket.can_recv() {
                 let mut cmd = [0u8; 4];
                 socket.recv_slice(&mut cmd[..]).ok();
-                let cmd = LittleEndian::read_u32(&cmd[..]);
+                let cmd = u32::from_le_bytes(cmd);
                 match cmd {
                    CMD_INFO  => cmd_info(&mut socket),
                    CMD_READ => cmd_read(&mut socket),

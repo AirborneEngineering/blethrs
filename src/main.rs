@@ -1,19 +1,15 @@
 #![no_std]
 #![no_main]
 
-extern crate cortex_m_rt;
-
 extern crate cortex_m;
+extern crate cortex_m_rt;
 extern crate cortex_m_semihosting;
 extern crate panic_halt;
-
 extern crate stm32f4;
-
 extern crate smoltcp;
-extern crate byteorder;
+extern crate ufmt;
 
 use cortex_m_rt::{entry, exception};
-
 use stm32f4::stm32f407;
 
 
@@ -36,24 +32,18 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Try to print over semihosting if a debugger is available
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        use cortex_m;
-        use cortex_m_semihosting;
+    ($($arg:expr),*) => ({
         if unsafe { (*cortex_m::peripheral::DCB::ptr()).dhcsr.read() & 1 == 1 } {
             match cortex_m_semihosting::hio::hstdout() {
-                Ok(mut stdout) => {write!(stdout, $($arg)*).ok();},
+                Ok(mut stdout) => {
+                    $(
+                        stdout.write_all($arg.as_bytes()).ok();
+                    )*
+                },
                 Err(_) => ()
-            };
+            }
         }
     })
-}
-
-/// Try to print a line over semihosting if a debugger is available
-#[macro_export]
-macro_rules! println {
-    ($fmt:expr) => (print!(concat!($fmt, "\n")));
-    ($fmt:expr, $($arg:tt)*) => (print!(concat!($fmt, "\n"), $($arg)*));
 }
 
 mod config;
@@ -168,55 +158,55 @@ fn main() -> ! {
         None => (),
     }
 
-    println!("");
-    println!("|-=-=-=-=-=-=-=-=-= blethrs =-=-=-=-=-=-=-=-=-");
-    println!("| Version {} {}", build_info::PKG_VERSION, build_info::GIT_VERSION.unwrap());
-    println!("| Platform {}", build_info::TARGET);
-    println!("| Built on {}", build_info::BUILT_TIME_UTC);
-    println!("| {}", build_info::RUSTC_VERSION);
-    println!("|-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n");
+    print!("\n|-=-=-=-=-=-=-=-=-= blethrs =-=-=-=-=-=-=-=-=-\n");
+    print!("| Version ", build_info::PKG_VERSION, " ", build_info::GIT_VERSION.unwrap(), "\n");
+    print!("| Platform ", build_info::TARGET, "\n");
+    print!("| Built on ", build_info::BUILT_TIME_UTC, "\n");
+    print!("| ", build_info::RUSTC_VERSION, "\n");
+    print!("|-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n\n");
 
     print!(  " Initialising clocks...               ");
     rcc_init(&mut peripherals);
-    println!("OK");
+    print!("OK\n");
 
     print!(  " Initialising GPIOs...                ");
     config::configure_gpio(&mut peripherals);
-    println!("OK");
+    print!("OK\n");
 
     print!(  " Reading configuration...             ");
     let cfg = match flash::UserConfig::get(&mut peripherals.CRC) {
-        Some(cfg) => { println!("OK"); cfg },
+        Some(cfg) => { print!("OK\n"); cfg },
         None => {
-            println!("Err\nCouldn't read configuration, using default.");
+            print!("Err\nCouldn't read configuration, using default.\n");
             flash::DEFAULT_CONFIG
         },
     };
-    println!("{}", cfg);
+
+    cfg.write_to_semihosting();
     let mac_addr = smoltcp::wire::EthernetAddress::from_bytes(&cfg.mac_address);
 
     print!(  " Initialising Ethernet...             ");
     let mut ethdev = ethernet::EthernetDevice::new(
         peripherals.ETHERNET_MAC, peripherals.ETHERNET_DMA);
     ethdev.init(&mut peripherals.RCC, mac_addr.clone());
-    println!("OK");
+    print!("OK\n");
 
     print!(  " Waiting for link...                  ");
     ethdev.block_until_link();
-    println!("OK");
+    print!("OK\n");
 
     print!(  " Initialising network...              ");
     let ip_addr = smoltcp::wire::Ipv4Address::from_bytes(&cfg.ip_address);
     let ip_cidr = smoltcp::wire::Ipv4Cidr::new(ip_addr, cfg.ip_prefix);
     let cidr = smoltcp::wire::IpCidr::Ipv4(ip_cidr);
     network::init(ethdev, mac_addr.clone(), cidr);
-    println!("OK");
+    print!("OK\n");
 
     // Move flash peripheral into flash module
     flash::init(peripherals.FLASH);
 
     // Turn on STATUS LED
-    println!(" Ready.\n");
+    print!(" Ready.\n\n");
 
     // Begin periodic tasks via systick
     systick_init(&mut core_peripherals.SYST);
@@ -236,7 +226,7 @@ fn SysTick() {
     network::poll(ticks as i64);
     match unsafe { core::ptr::read_volatile(&SYSTICK_RESET_AT) } {
         Some(reset_time) => if ticks >= reset_time {
-            println!("Performing scheduled reset");
+            print!("Performing scheduled reset\n");
             bootload::reset_bootload();
         },
         None => (),

@@ -1,7 +1,7 @@
 use core;
 use stm32f407;
 
-use core::fmt;
+use ufmt::uwrite;
 use ::{Error, Result};
 
 
@@ -31,19 +31,56 @@ pub struct UserConfig {
     checksum: u32,
 }
 
-impl fmt::Display for UserConfig {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "UserConfig:")?;
-        writeln!(f, "  MAC Address: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                 self.mac_address[0], self.mac_address[1], self.mac_address[2],
-                 self.mac_address[3], self.mac_address[4], self.mac_address[5])?;
-        writeln!(f, "  IP Address: {}.{}.{}.{}/{}",
-                 self.ip_address[0], self.ip_address[1], self.ip_address[2], self.ip_address[3],
-                 self.ip_prefix)?;
-        writeln!(f, "  Gateway: {}.{}.{}.{}",
-                 self.ip_gateway[0], self.ip_gateway[1], self.ip_gateway[2], self.ip_gateway[3])?;
-        writeln!(f, "  Checksum: {:08X}", self.checksum as u32)
+impl UserConfig {
+    pub fn write_to_semihosting(&self) {
+        if unsafe { (*cortex_m::peripheral::DCB::ptr()).dhcsr.read() & 1 == 0 } { return; }
+        let mut stdout = match cortex_m_semihosting::hio::hstdout() {
+            Ok(stdout) => stdout,
+            Err(_) => { return; },
+        };
+        let mut stdout = WriteAdapter(&mut stdout);
+        let mut hexbuf = [0u8; 2];
+        uwrite!(stdout, "  MAC Address: ",).ok();
+        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[0], &mut hexbuf)).ok();
+        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[1], &mut hexbuf)).ok();
+        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[2], &mut hexbuf)).ok();
+        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[3], &mut hexbuf)).ok();
+        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[4], &mut hexbuf)).ok();
+        uwrite!(stdout, "{}\n", u8_to_hex(self.mac_address[5], &mut hexbuf)).ok();
+        uwrite!(stdout, "  IP Address: {}.{}.{}.{}/{}\n",
+               self.ip_address[0], self.ip_address[1], self.ip_address[2], self.ip_address[3],
+               self.ip_prefix).ok();
+        uwrite!(stdout, "  Gateway: {}.{}.{}.{}\n",
+               self.ip_gateway[0], self.ip_gateway[1], self.ip_gateway[2],
+               self.ip_gateway[3]).ok();
+        uwrite!(stdout, "  Checksum: {}\n", self.checksum as u32).ok();
     }
+}
+
+struct WriteAdapter<W>(pub W) where W: core::fmt::Write;
+
+impl<W> ufmt::uWrite for WriteAdapter<W> where W: core::fmt::Write {
+    type Error = core::fmt::Error;
+
+    fn write_char(&mut self, c: char) -> core::result::Result<(), Self::Error> {
+        self.0.write_char(c)
+    }
+
+    fn write_str(&mut self, s: &str) -> core::result::Result<(), Self::Error> {
+        self.0.write_str(s)
+    }
+}
+
+fn u8_to_hex(x: u8, buf: &mut [u8]) -> &str {
+    static HEX_DIGITS: [u8; 16] = [
+        48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
+        65, 66, 67, 68, 69, 70,
+    ];
+    let v1 = x & 0x0F;
+    let v2 = (x & 0xF0) >> 4;
+    buf[0] = HEX_DIGITS[v2 as usize];
+    buf[1] = HEX_DIGITS[v1 as usize];
+    unsafe { core::str::from_utf8_unchecked(buf) }
 }
 
 pub static DEFAULT_CONFIG: UserConfig = UserConfig {
