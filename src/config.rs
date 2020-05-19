@@ -6,7 +6,7 @@ use ::bootload;
 pub const TCP_PORT: u16 = 7777;
 
 /// PHY address
-pub const ETH_PHY_ADDR: u8 = 1;
+pub const ETH_PHY_ADDR: u8 = 0;
 
 /// Start address of each sector in flash
 pub const FLASH_SECTOR_ADDRESSES: [u32; 12] =
@@ -64,10 +64,15 @@ pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
     let gpioa = &peripherals.GPIOA;
     let gpioc = &peripherals.GPIOC;
     let gpiog = &peripherals.GPIOG;
+    let gpioe = &peripherals.GPIOE;
 
     // Status LED
-    gpioa.moder.modify(|_, w| w.moder4().output());
-    gpioa.odr.modify(|_, w| w.odr4().set_bit());
+    gpioa.moder.modify(|_, w| w.moder3().output());
+    gpioa.odr.modify(|_, w| w.odr3().set_bit());
+
+    // PHY RESET
+    gpioe.moder.modify(|_, w| w.moder4().output());
+    gpioe.odr.modify(|_, w| w.odr4().set_bit());
 
     // Configure ethernet related GPIO:
     // GPIOA 1, 2, 7

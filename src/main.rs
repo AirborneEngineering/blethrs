@@ -90,11 +90,11 @@ fn rcc_init(peripherals: &mut stm32f407::Peripherals) {
 
     // Configure PLL: 16MHz /8 *168 /2, source HSI
     rcc.pllcfgr.write(|w| unsafe {
-        w.pllq().bits(4)
+        w.pllq().bits(7)
          .pllsrc().hsi()
          .pllp().div2()
          .plln().bits(168)
-         .pllm().bits(8)
+         .pllm().bits(10)
     });
     // Activate PLL
     rcc.cr.modify(|_, w| w.pllon().set_bit());
