@@ -224,14 +224,14 @@ def main():
         "info", help="Just read bootloader information without rebooting")
     parser_program = subparsers.add_parser(
         "program", help="Bootload new firmware image")
-    parser_program.add_argument("--lma", default=0x08010000,
+    parser_program.add_argument("--lma", default="0x08010000",
                                 help="address to load to, default 0x08010000")
     parser_program.add_argument("binfile", type=argparse.FileType('rb'),
                                 help="raw binary file to program")
     parser_configure = subparsers.add_parser(
         "configure", help="Load new configuration")
     parser_configure.add_argument(
-        "--lma", default=0x0800C000,
+        "--lma", default="0x0800C000",
         help="address to write to, default 0x0800C000")
     parser_configure.add_argument(
         "mac_address", help="MAC address, in format XX:XX:XX:XX:XX:XX")
@@ -242,6 +242,11 @@ def main():
     parser_configure.add_argument(
         "prefix_length", type=int, help="Subnet prefix length")
     subparsers.add_parser("boot", help="Send immediate reboot request")
+    parser_fpga = subparsers.add_parser("fpga", help="Load FPGA image")
+    parser_fpga.add_argument("--lma", default="0x080C0000",
+                             help="address to load to, default 0x080C0000")
+    parser_fpga.add_argument("binfile", type=argparse.FileType('rb'),
+                             help="bitstream file to program")
     args = parser.parse_args()
     cmd = args.command
 
@@ -254,12 +259,12 @@ def main():
         print("Received bootloader information:")
         print(info.decode())
 
-        if cmd == "program":
+        if cmd == "program" or cmd == "fpga":
             bindata = args.binfile.read()
-            write_file(args.hostname, args.port, args.chunk_size, args.lma,
-                       bindata)
+            write_file(args.hostname, args.port, args.chunk_size,
+                       int(args.lma, 0), bindata)
         elif cmd == "configure":
-            write_config(args.hostname, args.port, args.lma,
+            write_config(args.hostname, args.port, int(args.lma, 0),
                          args.mac_address, args.ip_address,
                          args.gateway_address, args.prefix_length)
 
