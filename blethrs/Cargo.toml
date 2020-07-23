@@ -1,0 +1,12 @@
+[package]
+name = "blethrs"
+version = "0.1.0"
+authors = ["mitchmindtree <mitchell.nordine@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+cortex-m = "0.6.2"
+cortex-m-rt = "0.6.12"
+smoltcp = { version = "0.6", default-features = false, features = ["proto-ipv4", "socket-tcp"] }
+stm32f4xx-hal = { version = "0.8.3", default-features = false, features = ["stm32f407", "rt"] }
+ufmt = { version = "0.1.0", optional = true }

@@ -6,18 +6,11 @@ use smoltcp::socket::{SocketSet, SocketSetItem, SocketHandle, TcpSocket, TcpSock
 
 use cortex_m;
 
-use ::flash;
+use blethrs::flash;
+use crate::TCP_PORT;
 use ::build_info;
 use ::Error;
 use ethernet::EthernetDevice;
-
-const CMD_INFO: u32 = 0;
-const CMD_READ: u32 = 1;
-const CMD_ERASE: u32 = 2;
-const CMD_WRITE: u32 = 3;
-const CMD_BOOT: u32 = 4;
-
-use ::config::TCP_PORT;
 
 /// Read an address and length from the socket
 fn read_adr_len(socket: &mut TcpSocket) -> (u32, usize) {
@@ -206,11 +199,11 @@ pub fn poll(time_ms: i64) {
                 socket.recv_slice(&mut cmd[..]).ok();
                 let cmd = u32::from_le_bytes(cmd);
                 match cmd {
-                   CMD_INFO  => cmd_info(&mut socket),
-                   CMD_READ => cmd_read(&mut socket),
-                   CMD_ERASE => cmd_erase(&mut socket),
-                   CMD_WRITE => cmd_write(&mut socket),
-                   CMD_BOOT => cmd_boot(&mut socket),
+                   blethrs::cmd::INFO  => cmd_info(&mut socket),
+                   blethrs::cmd::READ => cmd_read(&mut socket),
+                   blethrs::cmd::ERASE => cmd_erase(&mut socket),
+                   blethrs::cmd::WRITE => cmd_write(&mut socket),
+                   blethrs::cmd::BOOT => cmd_boot(&mut socket),
                     _ => (),
                 };
                 socket.close();

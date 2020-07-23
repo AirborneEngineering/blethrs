@@ -1,14 +1,20 @@
 use core;
-use stm32f407;
-
-use ufmt::uwrite;
-use ::{Error, Result};
-
+use crate::{Error, Result};
+use stm32f4xx_hal::stm32 as stm32f407;
 
 const CONFIG_MAGIC: u32 = 0x67797870;
 
-use ::config::{FLASH_SECTOR_ADDRESSES, FLASH_END, FLASH_CONFIG, FLASH_USER};
-
+/// Start address of each sector in flash
+pub const FLASH_SECTOR_ADDRESSES: [u32; 12] =
+    [0x0800_0000, 0x0800_4000, 0x0800_8000, 0x0800_C000,
+     0x0801_0000, 0x0802_0000, 0x0804_0000, 0x0806_0000,
+     0x0808_0000, 0x080A_0000, 0x080C_0000, 0x080E_0000];
+/// Final valid address in flash
+pub const FLASH_END: u32 = 0x080F_FFFF;
+/// Address of configuration sector. Must be one of the start addresses in FLASH_SECTOR_ADDRESSES.
+pub const FLASH_CONFIG: u32 = FLASH_SECTOR_ADDRESSES[3];
+/// Address of user firmware sector. Must be one of the start addresses in FLASH_SECTOR_ADDRESSES.
+pub const FLASH_USER: u32   = FLASH_SECTOR_ADDRESSES[4];
 
 static mut FLASH: Option<stm32f407::FLASH> = None;
 
@@ -32,69 +38,23 @@ pub struct UserConfig {
 }
 
 impl UserConfig {
-    pub fn write_to_semihosting(&self) {
-        if unsafe { (*cortex_m::peripheral::DCB::ptr()).dhcsr.read() & 1 == 0 } { return; }
-        let mut stdout = match cortex_m_semihosting::hio::hstdout() {
-            Ok(stdout) => stdout,
-            Err(_) => { return; },
-        };
-        let mut stdout = WriteAdapter(&mut stdout);
-        let mut hexbuf = [0u8; 2];
-        uwrite!(stdout, "  MAC Address: ",).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[0], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[1], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[2], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[3], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[4], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}\n", u8_to_hex(self.mac_address[5], &mut hexbuf)).ok();
-        uwrite!(stdout, "  IP Address: {}.{}.{}.{}/{}\n",
-               self.ip_address[0], self.ip_address[1], self.ip_address[2], self.ip_address[3],
-               self.ip_prefix).ok();
-        uwrite!(stdout, "  Gateway: {}.{}.{}.{}\n",
-               self.ip_gateway[0], self.ip_gateway[1], self.ip_gateway[2],
-               self.ip_gateway[3]).ok();
-        uwrite!(stdout, "  Checksum: {}\n", self.checksum as u32).ok();
-    }
-}
-
-struct WriteAdapter<W>(pub W) where W: core::fmt::Write;
-
-impl<W> ufmt::uWrite for WriteAdapter<W> where W: core::fmt::Write {
-    type Error = core::fmt::Error;
-
-    fn write_char(&mut self, c: char) -> core::result::Result<(), Self::Error> {
-        self.0.write_char(c)
+    pub fn new(
+        mac_address: [u8; 6],
+        ip_address: [u8; 4],
+        ip_gateway: [u8; 4],
+        ip_prefix: u8,
+    ) -> Self {
+        UserConfig {
+            magic: 0,
+            mac_address,
+            ip_address,
+            ip_gateway,
+            ip_prefix,
+            _padding: [0u8; 1],
+            checksum: 0,
+        }
     }
 
-    fn write_str(&mut self, s: &str) -> core::result::Result<(), Self::Error> {
-        self.0.write_str(s)
-    }
-}
-
-fn u8_to_hex(x: u8, buf: &mut [u8]) -> &str {
-    static HEX_DIGITS: [u8; 16] = [
-        48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
-        65, 66, 67, 68, 69, 70,
-    ];
-    let v1 = x & 0x0F;
-    let v2 = (x & 0xF0) >> 4;
-    buf[0] = HEX_DIGITS[v2 as usize];
-    buf[1] = HEX_DIGITS[v1 as usize];
-    unsafe { core::str::from_utf8_unchecked(buf) }
-}
-
-pub static DEFAULT_CONFIG: UserConfig = UserConfig {
-    // Locally administered MAC
-    magic: 0,
-    mac_address: [0x02, 0x00, 0x01, 0x02, 0x03, 0x04],
-    ip_address: [10, 1, 1, 10],
-    ip_gateway: [10, 1, 1, 1],
-    ip_prefix: 24,
-    _padding: [0u8; 1],
-    checksum: 0,
-};
-
-impl UserConfig {
     /// Attempt to read the UserConfig from flash sector 3 at 0x0800_C000.
     /// If a valid config cannot be read, the default one is returned instead.
     pub fn get(crc: &mut stm32f407::CRC) -> Option<UserConfig> {
