@@ -2,19 +2,7 @@ use core;
 use crate::{Error, Result};
 use crate::stm32;
 
-const CONFIG_MAGIC: u32 = 0x67797870;
-
-/// Start address of each sector in flash
-pub const FLASH_SECTOR_ADDRESSES: [u32; 12] =
-    [0x0800_0000, 0x0800_4000, 0x0800_8000, 0x0800_C000,
-     0x0801_0000, 0x0802_0000, 0x0804_0000, 0x0806_0000,
-     0x0808_0000, 0x080A_0000, 0x080C_0000, 0x080E_0000];
-/// Final valid address in flash
-pub const FLASH_END: u32 = 0x080F_FFFF;
-/// Address of configuration sector. Must be one of the start addresses in FLASH_SECTOR_ADDRESSES.
-pub const FLASH_CONFIG: u32 = FLASH_SECTOR_ADDRESSES[3];
-/// Address of user firmware sector. Must be one of the start addresses in FLASH_SECTOR_ADDRESSES.
-pub const FLASH_USER: u32   = FLASH_SECTOR_ADDRESSES[4];
+pub use blethrs_shared::{CONFIG_MAGIC, FLASH_SECTOR_ADDRESSES, FLASH_END, FLASH_CONFIG, FLASH_USER};
 
 static mut FLASH: Option<stm32::FLASH> = None;
 
@@ -55,19 +43,28 @@ impl UserConfig {
         }
     }
 
+    /// Attempt to read the UserConfig from flash.
+    ///
+    /// This method checks that the `CONFIG_MAGIC` is set, but does *not* check the crc checksum.
+    pub fn get_unchecked() -> Option<UserConfig> {
+        // Read config from flash
+        let cfg = unsafe { *(FLASH_CONFIG as *const UserConfig) };
+
+        // Check magic is correct
+        if cfg.magic != CONFIG_MAGIC {
+            None
+        } else {
+            Some(cfg.clone())
+        }
+    }
+
     /// Attempt to read the UserConfig from flash sector 3 at 0x0800_C000.
     /// If a valid config cannot be read, the default one is returned instead.
     pub fn get(crc: &mut stm32::CRC) -> Option<UserConfig> {
-        // Read config from flash
-        let adr = FLASH_CONFIG as *const u32;
-        let cfg = unsafe { *(FLASH_CONFIG as *const UserConfig) };
-
-        // First check magic is correct
-        if cfg.magic != CONFIG_MAGIC {
-            return None;
-        }
+        let cfg = Self::get_unchecked()?;
 
         // Validate checksum
+        let adr = FLASH_CONFIG as *const u32;
         let len = core::mem::size_of::<UserConfig>() / 4;
         crc.cr.write(|w| w.reset().reset());
         for idx in 0..(len - 1) {

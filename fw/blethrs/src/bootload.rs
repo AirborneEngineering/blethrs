@@ -20,7 +20,9 @@ pub fn should_enter_bootloader(rcc: &mut stm32::RCC) -> bool {
     // Our plan is:
     // * If the reset was a software reset, and the magic flag is in the magic location,
     //   then the user firmware requested bootload, so enter bootload.
-    was_software_reset(rcc) && flag_set()
+    let cond = was_software_reset(rcc) && flag_set();
+    clear_flag();
+    cond
 }
 
 /// Returns true if the most recent reset was due to a software request
@@ -38,9 +40,15 @@ pub fn was_software_reset(rcc: &mut stm32::RCC) -> bool {
 pub fn flag_set() -> bool {
     cortex_m::interrupt::free(|_| unsafe {
         let flag = core::ptr::read_volatile(BOOTLOAD_FLAG_ADDRESS as *const u32);
-        clear_flag();
         flag == BOOTLOAD_FLAG_VALUE
     })
+}
+
+/// Sets the flag indicating that we should enter the bootloader next time the device boots.
+pub fn set_flag() {
+    cortex_m::interrupt::free(|_| unsafe {
+        core::ptr::write_volatile(BOOTLOAD_FLAG_ADDRESS as *mut u32, BOOTLOAD_FLAG_VALUE);
+    });
 }
 
 fn clear_flag() {

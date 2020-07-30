@@ -78,6 +78,8 @@ const APP: () = {
 
         rprintln!("Setup clocks");
         cx.core.DWT.enable_cycle_counter();
+        // Enable clock for CRC.
+        cx.device.RCC.ahb1enr.modify(|_, w| w.crcen().enabled());
         let rcc = cx.device.RCC.constrain();
         let clocks = rcc.cfgr.sysclk(CYCLE_HZ.hz()).freeze();
 

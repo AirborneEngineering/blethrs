@@ -5,7 +5,7 @@ authors = ["mitchmindtree <mitchell.nordine@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-blethrs-shared = { path = "../../blethrs-shared" }
+blethrs-shared = { path = "../blethrs-shared" }
 cortex-m = "0.6.2"
 cortex-m-rt = "0.6.12"
 smoltcp = { version = "0.6", default-features = false, features = ["proto-ipv4", "socket-tcp"] }
