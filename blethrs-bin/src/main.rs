@@ -11,9 +11,9 @@ extern crate stm32f4xx_hal;
 extern crate smoltcp;
 
 use blethrs::{flash, Error};
+use blethrs::stm32 as stm32f407;
 use cortex_m_rt::{entry, exception};
 use rtt_target::{rprintln, rtt_init_print};
-use stm32f4xx_hal::stm32 as stm32f407;
 
 mod ethernet;
 mod network;
@@ -213,7 +213,7 @@ fn main() -> ! {
 
     // Jump to user code if it exists and hasn't asked us to run
     match flash::valid_user_code() {
-        Some(address) => if !blethrs::bootload::should_enter(&mut peripherals.RCC) {
+        Some(address) => if !blethrs::bootload::should_enter_bootloader(&mut peripherals.RCC) {
             if app_entry_cond(&mut peripherals) {
                 blethrs::bootload::bootload(&mut core_peripherals.SCB, address);
             }

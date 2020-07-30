@@ -1,6 +1,6 @@
+use crate::stm32;
 use core;
 use cortex_m;
-use stm32f4xx_hal::stm32 as stm32f407;
 
 /// Magic value used in this module to check if bootloader should start.
 pub const BOOTLOAD_FLAG_VALUE: u32 = 0xB00110AD;
@@ -16,21 +16,17 @@ static mut USER_RESET: Option<extern "C" fn()> = None;
 /// but you could also check GPIOs etc here.
 ///
 /// Ensure any state change to the peripherals is reset before returning from this function.
-pub fn should_enter(rcc: &mut stm32f407::RCC) -> bool {
+pub fn should_enter_bootloader(rcc: &mut stm32::RCC) -> bool {
     // Our plan is:
     // * If the reset was a software reset, and the magic flag is in the magic location,
     //   then the user firmware requested bootload, so enter bootload.
-    // * Otherwise we check if PD2 is LOW for at least a full byte period of the UART,
-    //   indicating someone has connected 3V to the external connector.
-    let was_sw_reset = was_software_reset(rcc);
-    let cond1 = was_sw_reset && flag_set();
-    cond1
+    was_software_reset(rcc) && flag_set()
 }
 
 /// Returns true if the most recent reset was due to a software request
 ///
 /// Clears the reset cause before returning, so this answer is only valid once.
-pub fn was_software_reset(rcc: &mut stm32f407::RCC) -> bool {
+pub fn was_software_reset(rcc: &mut stm32::RCC) -> bool {
     let result = rcc.csr.read().sftrstf().bit_is_set();
     rcc.csr.modify(|_, w| w.rmvf().set_bit());
     result
@@ -54,6 +50,7 @@ fn clear_flag() {
 }
 
 /// Trigger a reset that will cause us to bootload the user application next go around
+// TODO: Rewrite to accept SCB and use `sys_reset`.
 pub fn reset() {
     clear_flag();
     // It's troublesome to require SCB be passed in here, and

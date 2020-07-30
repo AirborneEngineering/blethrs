@@ -47,7 +47,7 @@ const ONE_MS: u32 = ONE_SEC / 1_000;
 const PORT: u16 = 7777;
 const MTU: usize = 1536;
 
-#[app(device = stm32f4xx_hal::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
+#[app(device = blethrs::stm32, peripherals = true, monotonic = rtic::cyccnt::CYCCNT)]
 const APP: () = {
     struct Resources {
         #[init(0)]
@@ -64,7 +64,7 @@ const APP: () = {
         rtt_init_print!();
 
         let cause = match blethrs::flash::valid_user_code() {
-            Some(address) if !blethrs::bootload::should_enter(&mut cx.device.RCC) => {
+            Some(address) if !blethrs::bootload::should_enter_bootloader(&mut cx.device.RCC) => {
                 rprintln!("Loading user program!");
                 blethrs::bootload::bootload(&mut cx.core.SCB, address);
                 loop {

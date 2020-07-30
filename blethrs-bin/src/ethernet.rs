@@ -1,7 +1,7 @@
+use blethrs::stm32 as stm32f407;
 use core;
 use cortex_m;
 use crate::ETH_PHY_ADDR;
-use stm32f4xx_hal::stm32 as stm32f407;
 
 use smoltcp::{self, phy::{self, DeviceCapabilities}, time::Instant, wire::EthernetAddress};
 

@@ -6,6 +6,7 @@ enabled = true
 
 [default.general]
 chip = "STM32F407VGTx"
+#chip = "STM32F107RC"
 
 [default.rtt]
 enabled = true

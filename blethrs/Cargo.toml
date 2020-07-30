@@ -8,5 +8,10 @@ edition = "2018"
 cortex-m = "0.6.2"
 cortex-m-rt = "0.6.12"
 smoltcp = { version = "0.6", default-features = false, features = ["proto-ipv4", "socket-tcp"] }
-stm32f4xx-hal = { version = "0.8.3", default-features = false, features = ["stm32f407", "rt"] }
+stm32f4xx-hal = { version = "0.8.3", default-features = false, features = ["stm32f407", "rt"], optional = true }
+stm32f1xx-hal = { version = "0.6.1", default-features = false, features = ["stm32f107", "rt"], optional = true }
 ufmt = { version = "0.1.0", optional = true }
+
+[features]
+stm32f407 = ["stm32f4xx-hal"]
+stm32f107 = ["stm32f1xx-hal"]
