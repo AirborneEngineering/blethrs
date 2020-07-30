@@ -1,8 +1,8 @@
 [workspace]
 members = [
+    "blethrs",
     "blethrs-bin",
     "blethrs-stm32-eth",
-    "blethrs",
 ]
 
 [profile.release]

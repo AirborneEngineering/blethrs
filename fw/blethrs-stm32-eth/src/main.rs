@@ -2,6 +2,7 @@
 #![no_std]
 
 use blethrs::flash::UserConfig;
+use core::convert::TryFrom;
 use panic_rtt_target as _;
 use rtic::app;
 use rtic::cyccnt::U32Ext as CyccntU32Ext;
@@ -67,9 +68,7 @@ const APP: () = {
             Some(address) if !blethrs::bootload::should_enter_bootloader(&mut cx.device.RCC) => {
                 rprintln!("Loading user program!");
                 blethrs::bootload::bootload(&mut cx.core.SCB, address);
-                loop {
-                    core::sync::atomic::spin_loop_hint();
-                }
+                ""
             },
             Some(_addr) => "User indicated",
             None => "Invalid user program",
@@ -248,17 +247,18 @@ fn handle_tcp(socket: &mut TcpSocket, reset_ms: &mut Option<u32>) {
     if socket.can_recv() {
         let mut cmd = [0u8; 4];
         socket.recv_slice(&mut cmd[..]).ok();
-        let cmd = u32::from_le_bytes(cmd);
-        let build_info = build_info();
-        match blethrs::cmd::handle_and_respond(cmd, &build_info, socket) {
-            Ok(reboot) if reboot => {
-                rprintln!("Resetting...");
-                *reset_ms = Some(50);
+        let cmd_u32 = u32::from_le_bytes(cmd);
+        match blethrs::cmd::Command::try_from(cmd_u32) {
+            Err(_) => rprintln!("Received unknown command: {}", cmd_u32),
+            Ok(cmd) => {
+                let build_info = build_info();
+                let reboot = blethrs::cmd::handle_and_respond(cmd, &build_info, socket);
+                if reboot {
+                    rprintln!("Resetting...");
+                    *reset_ms = Some(50);
+                }
             },
-            Err(_e) => rprintln!("Received unknown command: {}", cmd),
-            _ => (),
         }
-
         socket.close();
     }
 }

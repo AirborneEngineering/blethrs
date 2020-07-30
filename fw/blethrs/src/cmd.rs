@@ -1,6 +1,8 @@
 use crate::{flash, Error};
 use smoltcp::socket::TcpSocket;
 
+pub use blethrs_shared::Command;
+
 /// Information about the build running on the device.
 ///
 /// This can be trivially generated via the `built` crate.
@@ -10,14 +12,6 @@ pub struct BuildInfo<'a> {
     pub built_time_utc: &'a str,
     pub rustc_version: &'a str,
 }
-
-pub struct UnknownCommand;
-
-pub const INFO: u32 = 0;
-pub const READ: u32 = 1;
-pub const ERASE: u32 = 2;
-pub const WRITE: u32 = 3;
-pub const BOOT: u32 = 4;
 
 /// Read an address and length from the socket
 fn read_adr_len(socket: &mut TcpSocket) -> (u32, usize) {
@@ -113,21 +107,16 @@ pub fn boot(socket: &mut TcpSocket) {
 /// Respond to the given command.
 ///
 /// Returns whether or not rebooting (via `bootload::reset`) is required.
-pub fn handle_and_respond(
-    cmd: u32,
-    build_info: &BuildInfo,
-    socket: &mut TcpSocket,
-) -> Result<bool, UnknownCommand> {
+pub fn handle_and_respond(cmd: Command, build_info: &BuildInfo, socket: &mut TcpSocket) -> bool {
     match cmd {
-        INFO => info(build_info, socket),
-        READ => read(socket),
-        ERASE => erase(socket),
-        WRITE => write(socket),
-        BOOT => {
+        Command::Info => info(build_info, socket),
+        Command::Read => read(socket),
+        Command::Erase => erase(socket),
+        Command::Write => write(socket),
+        Command::Boot => {
             boot(socket);
-            return Ok(true);
+            return true;
         },
-        _ => return Err(UnknownCommand),
     };
-    Ok(false)
+    false
 }

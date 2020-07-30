@@ -15,18 +15,6 @@ pub use stm32f107 as stm32;
 #[cfg(feature = "stm32f407")]
 pub use stm32f407 as stm32;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Error {
-    Success,
-    InvalidAddress,
-    LengthNotMultiple4,
-    LengthTooLong,
-    DataLengthIncorrect,
-    EraseError,
-    WriteError,
-    FlashError,
-    NetworkError,
-    InternalError,
-}
+pub use blethrs_shared::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
