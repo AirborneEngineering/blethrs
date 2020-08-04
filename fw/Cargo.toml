@@ -1,0 +1,13 @@
+[workspace]
+members = [
+    "blethrs",
+    "blethrs-bin",
+    "blethrs-stm32-eth",
+]
+
+[profile.release]
+debug = true
+lto = true
+codegen-units = 1
+incremental = false
+opt-level = "s"

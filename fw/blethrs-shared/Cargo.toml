@@ -1,0 +1,5 @@
+[package]
+name = "blethrs-shared"
+version = "0.1.0"
+authors = ["mitchmindtree <mitchell.nordine@gmail.com>"]
+edition = "2018"

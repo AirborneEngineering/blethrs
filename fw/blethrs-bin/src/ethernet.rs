@@ -1,14 +1,13 @@
+use blethrs::stm32 as stm32f407;
 use core;
 use cortex_m;
-use stm32f407;
+use crate::ETH_PHY_ADDR;
 
 use smoltcp::{self, phy::{self, DeviceCapabilities}, time::Instant, wire::EthernetAddress};
 
 const ETH_BUF_SIZE: usize = 1536;
 const ETH_NUM_TD: usize = 4;
 const ETH_NUM_RD: usize = 4;
-
-use ::config::ETH_PHY_ADDR;
 
 /// Transmit Descriptor representation
 ///

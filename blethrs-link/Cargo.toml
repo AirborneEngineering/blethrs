@@ -1,0 +1,13 @@
+[package]
+name = "blethrs-link"
+version = "0.1.0"
+authors = ["mitchmindtree <mitchell.nordine@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+blethrs-shared = { path = "../fw/blethrs-shared" }
+crc = "1.8"
+log = "0.4.11"
+
+[dev-dependencies]
+env_logger = "0.7.1"

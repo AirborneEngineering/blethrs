@@ -1,19 +1,13 @@
 use core;
-use stm32f407;
+use crate::{Error, Result};
+use crate::stm32;
 
-use ufmt::uwrite;
-use ::{Error, Result};
+pub use blethrs_shared::{CONFIG_MAGIC, FLASH_SECTOR_ADDRESSES, FLASH_END, FLASH_CONFIG, FLASH_USER};
 
-
-const CONFIG_MAGIC: u32 = 0x67797870;
-
-use ::config::{FLASH_SECTOR_ADDRESSES, FLASH_END, FLASH_CONFIG, FLASH_USER};
-
-
-static mut FLASH: Option<stm32f407::FLASH> = None;
+static mut FLASH: Option<stm32::FLASH> = None;
 
 /// Call to move the flash peripheral into this module
-pub fn init(flash: stm32f407::FLASH) {
+pub fn init(flash: stm32::FLASH) {
     unsafe { FLASH = Some(flash) };
 }
 
@@ -32,82 +26,45 @@ pub struct UserConfig {
 }
 
 impl UserConfig {
-    pub fn write_to_semihosting(&self) {
-        if unsafe { (*cortex_m::peripheral::DCB::ptr()).dhcsr.read() & 1 == 0 } { return; }
-        let mut stdout = match cortex_m_semihosting::hio::hstdout() {
-            Ok(stdout) => stdout,
-            Err(_) => { return; },
-        };
-        let mut stdout = WriteAdapter(&mut stdout);
-        let mut hexbuf = [0u8; 2];
-        uwrite!(stdout, "  MAC Address: ",).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[0], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[1], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[2], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[3], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}:", u8_to_hex(self.mac_address[4], &mut hexbuf)).ok();
-        uwrite!(stdout, "{}\n", u8_to_hex(self.mac_address[5], &mut hexbuf)).ok();
-        uwrite!(stdout, "  IP Address: {}.{}.{}.{}/{}\n",
-               self.ip_address[0], self.ip_address[1], self.ip_address[2], self.ip_address[3],
-               self.ip_prefix).ok();
-        uwrite!(stdout, "  Gateway: {}.{}.{}.{}\n",
-               self.ip_gateway[0], self.ip_gateway[1], self.ip_gateway[2],
-               self.ip_gateway[3]).ok();
-        uwrite!(stdout, "  Checksum: {}\n", self.checksum as u32).ok();
-    }
-}
-
-struct WriteAdapter<W>(pub W) where W: core::fmt::Write;
-
-impl<W> ufmt::uWrite for WriteAdapter<W> where W: core::fmt::Write {
-    type Error = core::fmt::Error;
-
-    fn write_char(&mut self, c: char) -> core::result::Result<(), Self::Error> {
-        self.0.write_char(c)
+    pub fn new(
+        mac_address: [u8; 6],
+        ip_address: [u8; 4],
+        ip_gateway: [u8; 4],
+        ip_prefix: u8,
+    ) -> Self {
+        UserConfig {
+            magic: 0,
+            mac_address,
+            ip_address,
+            ip_gateway,
+            ip_prefix,
+            _padding: [0u8; 1],
+            checksum: 0,
+        }
     }
 
-    fn write_str(&mut self, s: &str) -> core::result::Result<(), Self::Error> {
-        self.0.write_str(s)
-    }
-}
-
-fn u8_to_hex(x: u8, buf: &mut [u8]) -> &str {
-    static HEX_DIGITS: [u8; 16] = [
-        48, 49, 50, 51, 52, 53, 54, 55, 56, 57,
-        65, 66, 67, 68, 69, 70,
-    ];
-    let v1 = x & 0x0F;
-    let v2 = (x & 0xF0) >> 4;
-    buf[0] = HEX_DIGITS[v2 as usize];
-    buf[1] = HEX_DIGITS[v1 as usize];
-    unsafe { core::str::from_utf8_unchecked(buf) }
-}
-
-pub static DEFAULT_CONFIG: UserConfig = UserConfig {
-    // Locally administered MAC
-    magic: 0,
-    mac_address: [0x02, 0x00, 0x01, 0x02, 0x03, 0x04],
-    ip_address: [10, 1, 1, 10],
-    ip_gateway: [10, 1, 1, 1],
-    ip_prefix: 24,
-    _padding: [0u8; 1],
-    checksum: 0,
-};
-
-impl UserConfig {
-    /// Attempt to read the UserConfig from flash sector 3 at 0x0800_C000.
-    /// If a valid config cannot be read, the default one is returned instead.
-    pub fn get(crc: &mut stm32f407::CRC) -> Option<UserConfig> {
+    /// Attempt to read the UserConfig from flash.
+    ///
+    /// This method checks that the `CONFIG_MAGIC` is set, but does *not* check the crc checksum.
+    pub fn get_unchecked() -> Option<UserConfig> {
         // Read config from flash
-        let adr = FLASH_CONFIG as *const u32;
         let cfg = unsafe { *(FLASH_CONFIG as *const UserConfig) };
 
-        // First check magic is correct
+        // Check magic is correct
         if cfg.magic != CONFIG_MAGIC {
-            return None;
+            None
+        } else {
+            Some(cfg.clone())
         }
+    }
+
+    /// Attempt to read the UserConfig from flash sector 3 at 0x0800_C000.
+    /// If a valid config cannot be read, the default one is returned instead.
+    pub fn get(crc: &mut stm32::CRC) -> Option<UserConfig> {
+        let cfg = Self::get_unchecked()?;
 
         // Validate checksum
+        let adr = FLASH_CONFIG as *const u32;
         let len = core::mem::size_of::<UserConfig>() / 4;
         crc.cr.write(|w| w.reset().reset());
         for idx in 0..(len - 1) {
@@ -167,7 +124,7 @@ fn check_length_correct(length: usize, data: &[u8]) -> Result<()> {
 }
 
 /// Try to get the FLASH peripheral
-fn get_flash_peripheral() -> Result<&'static mut stm32f407::FLASH> {
+fn get_flash_peripheral() -> Result<&'static mut stm32::FLASH> {
     match unsafe { FLASH.as_mut() } {
         Some(flash) => Ok(flash),
         None => Err(Error::InternalError),
@@ -175,7 +132,7 @@ fn get_flash_peripheral() -> Result<&'static mut stm32f407::FLASH> {
 }
 
 /// Try to unlock flash
-fn unlock(flash: &mut stm32f407::FLASH) -> Result<()> {
+fn unlock(flash: &mut stm32::FLASH) -> Result<()> {
     // Wait for any ongoing operations
     while flash.sr.read().bsy().bit_is_set() {}
 
@@ -191,7 +148,7 @@ fn unlock(flash: &mut stm32f407::FLASH) -> Result<()> {
 }
 
 /// Lock flash
-fn lock(flash: &mut stm32f407::FLASH) {
+fn lock(flash: &mut stm32::FLASH) {
     flash.cr.write(|w| w.lock().locked());
 }
 

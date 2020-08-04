@@ -1,0 +1,21 @@
+[package]
+name = "blethrs-stm32-eth"
+version = "0.1.0"
+authors = ["mitchmindtree <mitchell.nordine@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+blethrs = { path = "../blethrs" }
+cortex-m-rtic = "0.5.3"
+panic-rtt-target = { version = "0.1", features = ["cortex-m"] }
+rtt-target = { version = "0.2.0", features = ["cortex-m"] }
+smoltcp = { version = "0.6", default-features = false }
+stm32-eth = { git = "https://github.com/mitchmindtree/stm32-eth", branch = "stm32f4_setup_less_feats", default-features = false, features = ["smoltcp-phy"] }
+
+[build-dependencies]
+built = { version = "0.4.0", features = ["git2", "chrono"] }
+
+[features]
+stm32f407 = ["blethrs/stm32f407", "stm32-eth/stm32f407"]
+# TODO add F107 stm32-eth feature.
+stm32f107 = ["blethrs/stm32f107"]
