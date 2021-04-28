@@ -66,6 +66,7 @@ def program_elf(filename):
         "-ex", "monitor swdp_scan",
         "-ex", "attach 1",
         "-ex", "load",
+        "-ex", "compare-sections",
         "-ex", "detach"])
 
 
