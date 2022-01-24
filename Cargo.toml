@@ -20,7 +20,7 @@ version = "0.10.0"
 features = ["stm32f407", "rt"]
 
 [build-dependencies]
-built = { version = "0.4.0", features = ["git2", "chrono"] }
+built = { version = "0.4.4", features = ["git2", "chrono"] }
 
 [profile.release]
 debug = true

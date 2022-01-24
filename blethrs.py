@@ -161,28 +161,32 @@ def write_file(hostname, port, chunk_size, address, data):
     print("Readback successful.")
 
 
-def write_config(hostname, port, address, mac, ip, gw, prefix):
-    magic_bytes = struct.pack("<I", 0x67797870)
-
-    mac_bytes = [int(x, 16) for x in mac.split(":")]
-    mac_bytes = struct.pack("BBBBBB", *mac_bytes)
-
-    ip_bytes = [int(x) for x in ip.split(".")]
-    ip_bytes = struct.pack("BBBB", *ip_bytes)
-
-    gw_bytes = [int(x) for x in gw.split(".")]
-    gw_bytes = struct.pack("BBBB", *gw_bytes)
-
-    prefix_bytes = struct.pack("B", prefix)
-
-    padding_bytes = struct.pack("B", 0)
-
-    config_bytes = magic_bytes + mac_bytes + ip_bytes + gw_bytes + prefix_bytes
-    config_bytes += padding_bytes
-
+def write_config(hostname, port, address, args):
     crc32 = crcmod.predefined.mkCrcFun('crc-32-mpeg')
+
+    magic_bytes = struct.pack("<I", 0x67797870)
+    mac_bytes = [int(x, 16) for x in args.mac_address.split(":")]
+    mac_bytes = struct.pack("BBBBBB", *mac_bytes)
+    ip_bytes = [int(x) for x in args.ip_address.split(".")]
+    ip_bytes = struct.pack("BBBB", *ip_bytes)
+    gw_bytes = [int(x) for x in args.gateway_address.split(".")]
+    gw_bytes = struct.pack("BBBB", *gw_bytes)
+    prefix_bytes = struct.pack("B", args.prefix_length)
+    padding_bytes = struct.pack("B", 0)
+    config_bytes = (
+        magic_bytes + mac_bytes + ip_bytes + gw_bytes + prefix_bytes
+        + padding_bytes)
     u32 = struct.unpack(">5I", config_bytes)
     raw = struct.pack("<5I", *u32)
+    crc = crc32(raw)
+    crc_bytes = struct.pack("<I", crc)
+    config_bytes += crc_bytes
+    config_bytes += struct.pack(
+        "BBBB",
+        args.netsync_master, args.netsync_self_sync,
+        args.netsync_listen_id, args.netsync_transmit_id)
+    u32 = struct.unpack(">7I", config_bytes)
+    raw = struct.pack("<7I", *u32)
     crc = crc32(raw)
     crc_bytes = struct.pack("<I", crc)
     config_bytes += crc_bytes
@@ -241,6 +245,10 @@ def main():
         "gateway_address", help="Gateway address, in format XXX.XXX.XXX.XXX")
     parser_configure.add_argument(
         "prefix_length", type=int, help="Subnet prefix length")
+    parser_configure.add_argument("--netsync-master", action='store_true')
+    parser_configure.add_argument("--netsync-self-sync", action='store_true')
+    parser_configure.add_argument("--netsync-listen-id", type=int, default=0)
+    parser_configure.add_argument("--netsync-transmit-id", type=int, default=0)
     subparsers.add_parser("boot", help="Send immediate reboot request")
     parser_fpga = subparsers.add_parser("fpga", help="Load FPGA image")
     parser_fpga.add_argument("--lma", default="0x080C0000",
@@ -264,9 +272,7 @@ def main():
             write_file(args.hostname, args.port, args.chunk_size,
                        int(args.lma, 0), bindata)
         elif cmd == "configure":
-            write_config(args.hostname, args.port, int(args.lma, 0),
-                         args.mac_address, args.ip_address,
-                         args.gateway_address, args.prefix_length)
+            write_config(args.hostname, args.port, int(args.lma, 0), args)
 
         if cmd == "boot" or (not args.no_reboot and cmd != "info"):
             print("Sending reboot command...")
