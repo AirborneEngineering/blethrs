@@ -183,7 +183,7 @@ def write_config(hostname, port, address, args):
     config_bytes += crc_bytes
     config_bytes += struct.pack(
         "BBBB",
-        args.netsync_master, args.netsync_self_sync,
+        args.netsync_master, args.netsync_client,
         args.netsync_listen_id, args.netsync_transmit_id)
     u32 = struct.unpack(">7I", config_bytes)
     raw = struct.pack("<7I", *u32)
@@ -246,7 +246,7 @@ def main():
     parser_configure.add_argument(
         "prefix_length", type=int, help="Subnet prefix length")
     parser_configure.add_argument("--netsync-master", action='store_true')
-    parser_configure.add_argument("--netsync-self-sync", action='store_true')
+    parser_configure.add_argument("--netsync-client", action='store_true')
     parser_configure.add_argument("--netsync-listen-id", type=int, default=0)
     parser_configure.add_argument("--netsync-transmit-id", type=int, default=0)
     subparsers.add_parser("boot", help="Send immediate reboot request")
