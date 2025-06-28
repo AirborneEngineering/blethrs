@@ -36,24 +36,7 @@ pub fn should_enter_bootloader(peripherals: &mut stm32f407::Peripherals) -> bool
     // Our plan is:
     // * If the reset was a software reset, and the magic flag is in the magic location,
     //   then the user firmware requested bootload, so enter bootload.
-    // * Otherwise we check if PD2 is LOW for at least a full byte period of the UART,
-    //   indicating someone has connected 3V to the external connector.
-    let cond1 = bootload::was_software_reset(&mut peripherals.RCC) && bootload::flag_set();
-
-    peripherals.RCC.ahb1enr.modify(|_, w| w.gpioden().enabled());
-    peripherals.GPIOD.moder.modify(|_, w| w.moder2().input());
-
-    let hsi_clk = 16_000_000;
-    let sync_baud = 1_000_000;
-    let bit_periods = 10;
-    let delay = (hsi_clk / sync_baud) * bit_periods;
-    let mut cond2 = true;
-    for _ in 0..delay {
-        cond2 &= peripherals.GPIOD.idr.read().idr2().bit_is_clear();
-    }
-
-    peripherals.RCC.ahb1enr.modify(|_, w| w.gpioden().disabled());
-    cond1 || cond2
+    bootload::was_software_reset(&mut peripherals.RCC) && bootload::flag_set()
 }
 
 /// Set up GPIOs for ethernet.
@@ -62,30 +45,28 @@ pub fn should_enter_bootloader(peripherals: &mut stm32f407::Peripherals) -> bool
 /// This is also a sensible place to turn on an LED or similar to indicate bootloader mode.
 pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
     let gpioa = &peripherals.GPIOA;
+    let gpiob = &peripherals.GPIOB;
     let gpioc = &peripherals.GPIOC;
-    let gpiog = &peripherals.GPIOG;
+    let gpiod = &peripherals.GPIOD;
     let gpioe = &peripherals.GPIOE;
 
     // Status LED
-    gpioa.moder.modify(|_, w| w.moder3().output());
-    gpioa.odr.modify(|_, w| w.odr3().set_bit());
+    gpioe.moder.modify(|_, w| w.moder2().output());
+    gpioe.odr.modify(|_, w| w.odr2().set_bit());
 
     // PHY RESET
-    gpioe.moder.modify(|_, w| w.moder4().output());
-    gpioe.odr.modify(|_, w| w.odr4().set_bit());
+    gpioa.moder.modify(|_, w| w.moder0().output());
+    gpioa.odr.modify(|_, w| w.odr0().set_bit());
 
-    // Configure ethernet related GPIO:
-    // GPIOA 1, 2, 7
-    // GPIOC 1, 4, 5
-    // GPIOG 11, 13, 14
+    // Configure ethernet related GPIO.
     // All set to AF11 and very high speed.
     gpioa.moder.modify(|_, w|
         w.moder1().alternate()
          .moder2().alternate()
          .moder7().alternate());
-    gpiog.moder.modify(|_, w|
+    gpiob.moder.modify(|_, w|
          w.moder11().alternate()
-          .moder14().alternate()
+          .moder12().alternate()
           .moder13().alternate());
     gpioc.moder.modify(|_, w|
         w.moder1().alternate()
@@ -95,9 +76,9 @@ pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
         w.ospeedr1().very_high_speed()
          .ospeedr2().very_high_speed()
          .ospeedr7().very_high_speed());
-    gpiog.ospeedr.modify(|_, w|
+    gpiob.ospeedr.modify(|_, w|
         w.ospeedr11().very_high_speed()
-         .ospeedr14().very_high_speed()
+         .ospeedr12().very_high_speed()
          .ospeedr13().very_high_speed());
     gpioc.ospeedr.modify(|_, w|
         w.ospeedr1().very_high_speed()
@@ -107,9 +88,9 @@ pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
         w.afrl1().af11()
          .afrl2().af11()
          .afrl7().af11());
-    gpiog.afrh.modify(|_, w|
+    gpiob.afrh.modify(|_, w|
         w.afrh11().af11()
-         .afrh14().af11()
+         .afrh12().af11()
          .afrh13().af11());
     gpioc.afrl.modify(|_, w|
         w.afrl1().af11()
