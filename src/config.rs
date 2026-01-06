@@ -47,12 +47,11 @@ pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
     let gpioa = &peripherals.GPIOA;
     let gpiob = &peripherals.GPIOB;
     let gpioc = &peripherals.GPIOC;
-    let gpiod = &peripherals.GPIOD;
-    let gpioe = &peripherals.GPIOE;
+    let gpiog = &peripherals.GPIOG;
 
     // Status LED
-    gpioe.moder.modify(|_, w| w.moder2().output());
-    gpioe.odr.modify(|_, w| w.odr2().set_bit());
+    gpiob.moder.modify(|_, w| w.moder4().output());
+    gpiob.odr.modify(|_, w| w.odr4().set_bit());
 
     // PHY RESET
     gpioa.moder.modify(|_, w| w.moder0().output());
@@ -64,36 +63,36 @@ pub fn configure_gpio(peripherals: &mut stm32f407::Peripherals) {
         w.moder1().alternate()
          .moder2().alternate()
          .moder7().alternate());
-    gpiob.moder.modify(|_, w|
-         w.moder11().alternate()
-          .moder12().alternate()
-          .moder13().alternate());
     gpioc.moder.modify(|_, w|
         w.moder1().alternate()
          .moder4().alternate()
          .moder5().alternate());
+    gpiog.moder.modify(|_, w|
+        w.moder11().alternate()
+         .moder13().alternate()
+         .moder14().alternate());
     gpioa.ospeedr.modify(|_, w|
         w.ospeedr1().very_high_speed()
          .ospeedr2().very_high_speed()
          .ospeedr7().very_high_speed());
-    gpiob.ospeedr.modify(|_, w|
-        w.ospeedr11().very_high_speed()
-         .ospeedr12().very_high_speed()
-         .ospeedr13().very_high_speed());
     gpioc.ospeedr.modify(|_, w|
         w.ospeedr1().very_high_speed()
          .ospeedr4().very_high_speed()
          .ospeedr5().very_high_speed());
+    gpiog.ospeedr.modify(|_, w|
+        w.ospeedr11().very_high_speed()
+         .ospeedr13().very_high_speed()
+         .ospeedr14().very_high_speed());
     gpioa.afrl.modify(|_, w|
         w.afrl1().af11()
          .afrl2().af11()
          .afrl7().af11());
-    gpiob.afrh.modify(|_, w|
-        w.afrh11().af11()
-         .afrh12().af11()
-         .afrh13().af11());
     gpioc.afrl.modify(|_, w|
         w.afrl1().af11()
          .afrl4().af11()
          .afrl5().af11());
+    gpiog.afrh.modify(|_, w|
+        w.afrh11().af11()
+         .afrh13().af11()
+         .afrh14().af11());
 }
