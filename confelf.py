@@ -61,7 +61,7 @@ def make_elf(filename, data, address):
 
 def program_elf(filename):
     subprocess.run([
-        "arm-none-eabi-gdb", filename, "--batch",
+        "gdb-multiarch", filename, "--batch",
         "-ex", "target extended-remote /dev/ttyACM0",
         "-ex", "monitor swdp_scan",
         "-ex", "attach 1",
